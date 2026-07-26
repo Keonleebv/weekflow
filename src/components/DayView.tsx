@@ -9,6 +9,7 @@ import {
   offsetForMinutes,
   nowOffset,
 } from "../lib/time";
+import { useDragCreate, type Range } from "../lib/useDragCreate";
 import type { Category } from "../types";
 import { XSmall } from "./icons";
 
@@ -20,7 +21,11 @@ function blockStyle(cat: Category): React.CSSProperties {
   };
 }
 
-export function DayView() {
+type Props = {
+  onCreateRange: (r: Range) => void;
+};
+
+export function DayView({ onCreateRange }: Props) {
   const blocks = useStore((s) => s.blocks);
   const tasks = useStore((s) => s.tasks);
   const categories = useStore((s) => s.categories);
@@ -28,6 +33,9 @@ export function DayView() {
   const selectedDay = useStore((s) => s.selectedDay);
   const toggleTask = useStore((s) => s.toggleTask);
   const deleteBlock = useStore((s) => s.deleteBlock);
+
+  const { preview, onPointerDown, onPointerMove, onPointerUp } =
+    useDragCreate(onCreateRange);
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const dayBlocks = blocks
@@ -53,7 +61,13 @@ export function DayView() {
               </div>
             ))}
           </div>
-          <div className="dt-track" style={{ height: GRID_HEIGHT }}>
+          <div
+            className="dt-track"
+            style={{ height: GRID_HEIGHT }}
+            onPointerDown={(e) => onPointerDown(e, selectedDay)}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+          >
             {dayBlocks.map((b) => {
               const cat = catById(b.categoryId);
               if (!cat) return null;
@@ -103,6 +117,18 @@ export function DayView() {
                 </div>
               );
             })}
+            {preview && preview.day === selectedDay && (
+              <div
+                className="dt-drag-preview"
+                style={{
+                  top: offsetForMinutes(preview.start),
+                  height: Math.max(
+                    2,
+                    offsetForMinutes(preview.end) - offsetForMinutes(preview.start)
+                  ),
+                }}
+              />
+            )}
             {now !== null && <div className="dt-now-line" style={{ top: now }} />}
           </div>
         </div>

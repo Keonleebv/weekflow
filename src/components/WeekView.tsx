@@ -12,6 +12,7 @@ import {
   todayIndexInWeek,
   dateForDay,
 } from "../lib/time";
+import { useDragCreate, type Range } from "../lib/useDragCreate";
 import type { Category } from "../types";
 import { XSmall } from "./icons";
 
@@ -23,15 +24,29 @@ function blockStyle(cat: Category): React.CSSProperties {
   };
 }
 
-export function WeekView() {
+type Props = {
+  onCreateRange: (r: Range) => void;
+};
+
+export function WeekView({ onCreateRange }: Props) {
   const blocks = useStore((s) => s.blocks);
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const deleteBlock = useStore((s) => s.deleteBlock);
+  const setView = useStore((s) => s.setView);
+  const setSelectedDay = useStore((s) => s.setSelectedDay);
+
+  const { preview, onPointerDown, onPointerMove, onPointerUp } =
+    useDragCreate(onCreateRange);
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const todayIdx = todayIndexInWeek(currentWeekStart);
   const weekBlocks = blocks.filter((b) => b.weekOf === currentWeekStart);
+
+  const openDay = (day: number) => {
+    setSelectedDay(day);
+    setView("day");
+  };
 
   const hours: number[] = [];
   for (let h = GRID_START_H; h <= GRID_END_H; h++) hours.push(h);
@@ -66,7 +81,14 @@ export function WeekView() {
               .sort((a, b) => a.startMinutes - b.startMinutes);
             const now = nowOffset(currentWeekStart, d);
             return (
-              <div key={d} className="day-col" style={{ height: GRID_HEIGHT }}>
+              <div
+                key={d}
+                className="day-col"
+                style={{ height: GRID_HEIGHT }}
+                onPointerDown={(e) => onPointerDown(e, d)}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+              >
                 {dayBlocks.map((b) => {
                   const cat = catById(b.categoryId);
                   if (!cat) return null;
@@ -80,11 +102,17 @@ export function WeekView() {
                       key={b.id}
                       className="block"
                       style={{ top, height, ...blockStyle(cat) }}
+                      onClick={() => openDay(d)}
+                      title="Open day view"
                     >
                       <button
                         className="b-del"
                         aria-label="Delete block"
-                        onClick={() => deleteBlock(b.id)}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteBlock(b.id);
+                        }}
                       >
                         <XSmall />
                       </button>
@@ -95,6 +123,19 @@ export function WeekView() {
                     </div>
                   );
                 })}
+                {preview && preview.day === d && (
+                  <div
+                    className="drag-preview"
+                    style={{
+                      top: offsetForMinutes(preview.start),
+                      height: Math.max(
+                        2,
+                        offsetForMinutes(preview.end) -
+                          offsetForMinutes(preview.start)
+                      ),
+                    }}
+                  />
+                )}
                 {now !== null && <div className="now-line" style={{ top: now }} />}
               </div>
             );

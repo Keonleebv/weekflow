@@ -53,6 +53,15 @@ export function offsetForMinutes(mins: number): number {
   return ((mins - GRID_START_H * 60) / 60) * HOUR_H;
 }
 
+export const SNAP_MIN = 15;
+
+/** Minute-of-day for a vertical pixel offset, snapped to SNAP_MIN and clamped to grid. */
+export function minutesFromOffset(offsetPx: number): number {
+  const raw = GRID_START_H * 60 + (offsetPx / HOUR_H) * 60;
+  const snapped = Math.round(raw / SNAP_MIN) * SNAP_MIN;
+  return Math.max(GRID_START_H * 60, Math.min(GRID_END_H * 60, snapped));
+}
+
 /** Now-line offset for a day, or null if today isn't that day / off-grid. */
 export function nowOffset(weekOfISO: string, dayIdx: number): number | null {
   if (todayIndexInWeek(weekOfISO) !== dayIdx) return null;

@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
-import { DAYS, GRID_START_H, GRID_END_H, fmtTime } from "../lib/time";
+import { DAYS, GRID_START_H, GRID_END_H, SNAP_MIN, fmtTime } from "../lib/time";
 import { CloseIcon } from "./icons";
+
+type Prefill = { day: number; start: number; end: number };
 
 type Props = {
   open: boolean;
+  prefill?: Prefill | null;
   onClose: () => void;
   onSaved: () => void;
 };
 
 const TIME_OPTIONS: number[] = [];
-for (let m = GRID_START_H * 60; m <= GRID_END_H * 60; m += 30) TIME_OPTIONS.push(m);
+for (let m = GRID_START_H * 60; m <= GRID_END_H * 60; m += SNAP_MIN)
+  TIME_OPTIONS.push(m);
 
-export function AddBlockModal({ open, onClose, onSaved }: Props) {
+export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
   const categories = useStore((s) => s.categories);
   const view = useStore((s) => s.view);
   const selectedDay = useStore((s) => s.selectedDay);
@@ -28,13 +32,13 @@ export function AddBlockModal({ open, onClose, onSaved }: Props) {
   useEffect(() => {
     if (open) {
       setCatId(categories[0]?.id ?? "");
-      setDay(view === "day" ? selectedDay : 2);
-      setStart(9 * 60);
-      setEnd(11 * 60);
+      setDay(prefill ? prefill.day : view === "day" ? selectedDay : 2);
+      setStart(prefill ? prefill.start : 9 * 60);
+      setEnd(prefill ? prefill.end : 11 * 60);
       setTitle("");
       setError("");
     }
-  }, [open, view, selectedDay, categories]);
+  }, [open, prefill, view, selectedDay, categories]);
 
   if (!open) return null;
 

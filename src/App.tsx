@@ -11,9 +11,12 @@ import { GCalCard } from "./components/GCalCard";
 import { AddBlockModal } from "./components/AddBlockModal";
 import { AllocationModal } from "./components/AllocationModal";
 
+type Prefill = { day: number; start: number; end: number };
+
 function App() {
   const view = useStore((s) => s.view);
   const [blockOpen, setBlockOpen] = useState(false);
+  const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [allocOpen, setAllocOpen] = useState(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
@@ -22,6 +25,11 @@ function App() {
     setToast(msg);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(""), 2000);
+  }, []);
+
+  const openAdd = useCallback((p: Prefill | null = null) => {
+    setPrefill(p);
+    setBlockOpen(true);
   }, []);
 
   // "c" keyboard shortcut for Add Block
@@ -36,13 +44,13 @@ function App() {
         const tag = (document.activeElement?.tagName || "").toUpperCase();
         if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") {
           e.preventDefault();
-          setBlockOpen(true);
+          openAdd();
         }
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [blockOpen, allocOpen]);
+  }, [blockOpen, allocOpen, openAdd]);
 
   // re-render every minute to move the now-line
   const [, force] = useState(0);
@@ -56,9 +64,13 @@ function App() {
       <Rail onOpenAllocation={() => setAllocOpen(true)} />
 
       <div className="content-col">
-        <TopBar onAddBlock={() => setBlockOpen(true)} />
+        <TopBar onAddBlock={() => openAdd()} />
         {view === "day" && <DayPills />}
-        {view === "week" ? <WeekView /> : <DayView />}
+        {view === "week" ? (
+          <WeekView onCreateRange={openAdd} />
+        ) : (
+          <DayView onCreateRange={openAdd} />
+        )}
       </div>
 
       <div className="sidebar">
@@ -71,6 +83,7 @@ function App() {
 
       <AddBlockModal
         open={blockOpen}
+        prefill={prefill}
         onClose={() => setBlockOpen(false)}
         onSaved={() => showToast("Block added")}
       />
