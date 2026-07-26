@@ -11,8 +11,8 @@ export const DAY_FULL = [
   "Sunday",
 ];
 
-export const GRID_START_H = 6; // 6am
-export const GRID_END_H = 23; // 11pm
+export const GRID_START_H = 0; // 12am
+export const GRID_END_H = 24; // 12am (next day) — full 24 hours
 export const HOUR_H = 60;
 export const GRID_HEIGHT = (GRID_END_H - GRID_START_H) * HOUR_H;
 
@@ -45,7 +45,10 @@ export function fmtTime(mins: number): string {
 }
 
 export function hourLabel(h: number): string {
-  return h === 12 ? "12PM" : h > 12 ? h - 12 + "PM" : h + "AM";
+  const hh = ((h % 24) + 24) % 24;
+  if (hh === 0) return "12AM";
+  if (hh === 12) return "12PM";
+  return hh > 12 ? hh - 12 + "PM" : hh + "AM";
 }
 
 /** Vertical pixel offset from grid top for a minute-of-day value. */
@@ -69,6 +72,14 @@ export function nowOffset(weekOfISO: string, dayIdx: number): number | null {
   const mins = now.getHours() * 60 + now.getMinutes();
   if (mins < GRID_START_H * 60 || mins > GRID_END_H * 60) return null;
   return offsetForMinutes(mins);
+}
+
+/** A sensible initial scrollTop so the grid opens near the current time
+ *  (with some lead-in padding) rather than at midnight. */
+export function scrollToNowTop(padding = 150): number {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return Math.max(0, offsetForMinutes(mins) - padding);
 }
 
 export function uid(prefix: string): string {

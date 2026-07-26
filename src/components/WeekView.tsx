@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useStore } from "../store";
 import {
   DAYS,
@@ -11,6 +12,7 @@ import {
   nowOffset,
   todayIndexInWeek,
   dateForDay,
+  scrollToNowTop,
 } from "../lib/time";
 import { useDragCreate, type Range } from "../lib/useDragCreate";
 import type { Category } from "../types";
@@ -39,6 +41,11 @@ export function WeekView({ onCreateRange }: Props) {
   const { preview, onPointerDown, onPointerMove, onPointerUp } =
     useDragCreate(onCreateRange);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollToNowTop();
+  }, []);
+
   const catById = (id: string) => categories.find((c) => c.id === id);
   const todayIdx = todayIndexInWeek(currentWeekStart);
   const weekBlocks = blocks.filter((b) => b.weekOf === currentWeekStart);
@@ -62,7 +69,7 @@ export function WeekView({ onCreateRange }: Props) {
           </div>
         ))}
       </div>
-      <div className="grid-scroll">
+      <div className="grid-scroll" ref={scrollRef}>
         <div className="grid" style={{ height: GRID_HEIGHT }}>
           <div className="hour-labels" style={{ height: GRID_HEIGHT }}>
             {hours.map((h) => (
