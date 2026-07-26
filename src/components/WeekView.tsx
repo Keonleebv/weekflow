@@ -35,8 +35,7 @@ export function WeekView({ onCreateRange }: Props) {
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const deleteBlock = useStore((s) => s.deleteBlock);
-  const setView = useStore((s) => s.setView);
-  const setSelectedDay = useStore((s) => s.setSelectedDay);
+  const focusDay = useStore((s) => s.focusDay);
 
   const { preview, onPointerDown, onPointerMove, onPointerUp } =
     useDragCreate(onCreateRange);
@@ -49,11 +48,6 @@ export function WeekView({ onCreateRange }: Props) {
   const catById = (id: string) => categories.find((c) => c.id === id);
   const todayIdx = todayIndexInWeek(currentWeekStart);
   const weekBlocks = blocks.filter((b) => b.weekOf === currentWeekStart);
-
-  const openDay = (day: number) => {
-    setSelectedDay(day);
-    setView("day");
-  };
 
   const hours: number[] = [];
   for (let h = GRID_START_H; h <= GRID_END_H; h++) hours.push(h);
@@ -109,8 +103,8 @@ export function WeekView({ onCreateRange }: Props) {
                       key={b.id}
                       className="block"
                       style={{ top, height, ...blockStyle(cat) }}
-                      onClick={() => openDay(d)}
-                      title="Open day view"
+                      onClick={() => focusDay(d, b.startMinutes)}
+                      title="Open in day view"
                     >
                       <button
                         className="b-del"

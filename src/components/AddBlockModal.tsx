@@ -27,6 +27,7 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
   const [start, setStart] = useState(9 * 60);
   const [end, setEnd] = useState(11 * 60);
   const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
       setStart(prefill ? prefill.start : 9 * 60);
       setEnd(prefill ? prefill.end : 11 * 60);
       setTitle("");
+      setNotes("");
       setError("");
     }
   }, [open, prefill, view, selectedDay, categories]);
@@ -53,6 +55,7 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
       startMinutes: start,
       endMinutes: end,
       title: title.trim(),
+      notes: notes.trim() || undefined,
     });
     onSaved();
     onClose();
@@ -142,6 +145,16 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Deep work session"
+          />
+        </div>
+
+        <div className="field">
+          <label>Notes (optional)</label>
+          <textarea
+            className="text-input modal-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Anything you want to remember for this block…"
           />
         </div>
 

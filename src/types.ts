@@ -13,6 +13,7 @@ export type Block = {
   startMinutes: number; // minutes from midnight
   endMinutes: number;
   weekOf: string; // ISO date of that week's Monday
+  notes?: string;
 };
 
 export type Task = {

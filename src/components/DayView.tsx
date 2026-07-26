@@ -35,13 +35,25 @@ export function DayView({ onCreateRange }: Props) {
   const selectedDay = useStore((s) => s.selectedDay);
   const toggleTask = useStore((s) => s.toggleTask);
   const deleteBlock = useStore((s) => s.deleteBlock);
+  const updateBlock = useStore((s) => s.updateBlock);
 
   const { preview, onPointerDown, onPointerMove, onPointerUp } =
     useDragCreate(onCreateRange);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrolledRef = useRef(false);
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollToNowTop();
+    const el = scrollRef.current;
+    if (!el || scrolledRef.current) return; // guard StrictMode double-invoke
+    scrolledRef.current = true;
+    const pending = useStore.getState().pendingScrollMinutes;
+    if (pending != null) {
+      // jumped here from a Week-view block — land on that block
+      el.scrollTop = Math.max(0, offsetForMinutes(pending) - 80);
+      useStore.getState().clearPendingScroll();
+    } else {
+      el.scrollTop = scrollToNowTop();
+    }
   }, []);
 
   const catById = (id: string) => categories.find((c) => c.id === id);
@@ -80,7 +92,7 @@ export function DayView({ onCreateRange }: Props) {
               if (!cat) return null;
               const top = offsetForMinutes(b.startMinutes);
               const blockTasks = tasks.filter((t) => t.blockId === b.id);
-              const minH = 64 + blockTasks.length * 24;
+              const minH = 64 + blockTasks.length * 24 + 48;
               const height = Math.max(
                 minH,
                 ((b.endMinutes - b.startMinutes) / 60) * HOUR_H - 4
@@ -121,6 +133,13 @@ export function DayView({ onCreateRange }: Props) {
                       </div>
                     ))}
                   </div>
+                  <textarea
+                    className="dt-notes"
+                    placeholder="Notes…"
+                    value={b.notes ?? ""}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
+                  />
                 </div>
               );
             })}

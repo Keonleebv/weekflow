@@ -28,6 +28,17 @@ export function TaskList() {
   const dayTasks = tasks.filter((t) => t.blockId && dayBlockIds.includes(t.blockId));
   const doneCount = dayTasks.filter((t) => t.done).length;
 
+  // whole-week progress across every block in the current week
+  const weekBlockIds = blocks
+    .filter((b) => b.weekOf === currentWeekStart)
+    .map((b) => b.id);
+  const weekTasks = tasks.filter(
+    (t) => t.blockId && weekBlockIds.includes(t.blockId)
+  );
+  const weekDone = weekTasks.filter((t) => t.done).length;
+  const pct = (done: number, total: number) =>
+    total ? `${(done / total) * 100}%` : "0%";
+
   return (
     <>
       <div className="card">
@@ -67,9 +78,10 @@ export function TaskList() {
       </div>
 
       <div className="card">
-        <p className="card-title">Today's Progress</p>
+        <p className="card-title">Progress</p>
+
         <div className="progress-label">
-          <span>Tasks completed</span>
+          <span>Today</span>
           <span>
             {doneCount} / {dayTasks.length}
           </span>
@@ -77,9 +89,20 @@ export function TaskList() {
         <div className="progress-track">
           <div
             className="progress-fill"
-            style={{
-              width: dayTasks.length ? `${(doneCount / dayTasks.length) * 100}%` : "0%",
-            }}
+            style={{ width: pct(doneCount, dayTasks.length) }}
+          />
+        </div>
+
+        <div className="progress-label" style={{ marginTop: 14 }}>
+          <span>This week</span>
+          <span>
+            {weekDone} / {weekTasks.length}
+          </span>
+        </div>
+        <div className="progress-track">
+          <div
+            className="progress-fill"
+            style={{ width: pct(weekDone, weekTasks.length) }}
           />
         </div>
       </div>

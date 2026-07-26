@@ -12,15 +12,21 @@ type State = {
   view: View;
   selectedDay: number;
   currentWeekStart: string;
+  // transient: minute-of-day that Day view should scroll to on next mount
+  // (set when jumping from a Week-view block). Not persisted.
+  pendingScrollMinutes: number | null;
 };
 
 type Actions = {
   setView: (v: View) => void;
   setSelectedDay: (d: number) => void;
+  focusDay: (day: number, minutes: number) => void;
+  clearPendingScroll: () => void;
   prevWeek: () => void;
   nextWeek: () => void;
 
   addBlock: (b: Omit<Block, "id" | "weekOf"> & { weekOf?: string }) => void;
+  updateBlock: (id: string, patch: Partial<Block>) => void;
   deleteBlock: (id: string) => void;
 
   addTask: (t: { title: string; blockId?: string; categoryId?: string }) => void;
@@ -97,6 +103,7 @@ function seed(): State {
     view: "week",
     selectedDay: 2,
     currentWeekStart,
+    pendingScrollMinutes: null,
   };
 }
 
@@ -107,6 +114,9 @@ export const useStore = create<State & Actions>()(
 
       setView: (view) => set({ view }),
       setSelectedDay: (selectedDay) => set({ selectedDay }),
+      focusDay: (day, minutes) =>
+        set({ selectedDay: day, view: "day", pendingScrollMinutes: minutes }),
+      clearPendingScroll: () => set({ pendingScrollMinutes: null }),
       prevWeek: () =>
         set((s) => ({
           currentWeekStart: format(
@@ -128,6 +138,10 @@ export const useStore = create<State & Actions>()(
             ...s.blocks,
             { ...b, id: uid("b"), weekOf: b.weekOf ?? s.currentWeekStart },
           ],
+        })),
+      updateBlock: (id, patch) =>
+        set((s) => ({
+          blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
         })),
       deleteBlock: (id) =>
         set((s) => ({
@@ -183,6 +197,17 @@ export const useStore = create<State & Actions>()(
         }));
       },
     }),
-    { name: "weekflow-state" }
+    {
+      name: "weekflow-state",
+      // pendingScrollMinutes is a transient UI signal — don't persist it
+      partialize: (s) => ({
+        categories: s.categories,
+        blocks: s.blocks,
+        tasks: s.tasks,
+        view: s.view,
+        selectedDay: s.selectedDay,
+        currentWeekStart: s.currentWeekStart,
+      }),
+    }
   )
 );
