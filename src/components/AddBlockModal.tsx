@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { DAYS, GRID_START_H, GRID_END_H, SNAP_MIN, fmtTime } from "../lib/time";
+import type { Block } from "../types";
 import { CloseIcon } from "./icons";
 
 type Prefill = { day: number; start: number; end: number };
@@ -8,19 +9,22 @@ type Prefill = { day: number; start: number; end: number };
 type Props = {
   open: boolean;
   prefill?: Prefill | null;
+  editing?: Block | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (msg: string) => void;
 };
 
 const TIME_OPTIONS: number[] = [];
 for (let m = GRID_START_H * 60; m <= GRID_END_H * 60; m += SNAP_MIN)
   TIME_OPTIONS.push(m);
 
-export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
+export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Props) {
   const categories = useStore((s) => s.categories);
   const view = useStore((s) => s.view);
   const selectedDay = useStore((s) => s.selectedDay);
   const addBlock = useStore((s) => s.addBlock);
+  const updateBlock = useStore((s) => s.updateBlock);
+  const deleteBlock = useStore((s) => s.deleteBlock);
 
   const [catId, setCatId] = useState(categories[0]?.id ?? "");
   const [day, setDay] = useState(2);
@@ -31,16 +35,24 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (editing) {
+      setCatId(editing.categoryId);
+      setDay(editing.day);
+      setStart(editing.startMinutes);
+      setEnd(editing.endMinutes);
+      setTitle(editing.title);
+      setNotes(editing.notes ?? "");
+    } else {
       setCatId(categories[0]?.id ?? "");
       setDay(prefill ? prefill.day : view === "day" ? selectedDay : 2);
       setStart(prefill ? prefill.start : 9 * 60);
       setEnd(prefill ? prefill.end : 11 * 60);
       setTitle("");
       setNotes("");
-      setError("");
     }
-  }, [open, prefill, view, selectedDay, categories]);
+    setError("");
+  }, [open, editing, prefill, view, selectedDay, categories]);
 
   if (!open) return null;
 
@@ -49,16 +61,30 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
       setError("End time must be after start time.");
       return;
     }
-    addBlock({
+    const fields = {
       categoryId: catId,
       day,
       startMinutes: start,
       endMinutes: end,
       title: title.trim(),
       notes: notes.trim() || undefined,
-    });
-    onSaved();
+    };
+    if (editing) {
+      updateBlock(editing.id, fields);
+      onSaved("Block updated");
+    } else {
+      addBlock(fields);
+      onSaved("Block added");
+    }
     onClose();
+  };
+
+  const removeBlock = () => {
+    if (editing) {
+      deleteBlock(editing.id);
+      onSaved("Block deleted");
+      onClose();
+    }
   };
 
   return (
@@ -70,7 +96,7 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
     >
       <div className="modal">
         <div className="modal-head">
-          <h3>Add Block</h3>
+          <h3>{editing ? "Edit Block" : "Add Block"}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <CloseIcon />
           </button>
@@ -161,11 +187,20 @@ export function AddBlockModal({ open, prefill, onClose, onSaved }: Props) {
         {error && <div className="gcal-error" style={{ marginBottom: 12 }}>{error}</div>}
 
         <div className="modal-actions">
+          {editing && (
+            <button
+              className="btn-secondary btn-danger"
+              onClick={removeBlock}
+              style={{ marginRight: "auto" }}
+            >
+              Delete
+            </button>
+          )}
           <button className="btn-secondary" onClick={onClose}>
             Cancel
           </button>
           <button className="btn-primary" onClick={save}>
-            Add Block
+            {editing ? "Save changes" : "Add Block"}
           </button>
         </div>
       </div>

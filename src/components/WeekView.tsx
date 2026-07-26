@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import {
   DAYS,
@@ -15,7 +15,8 @@ import {
   scrollToNowTop,
 } from "../lib/time";
 import { useDragCreate, type Range } from "../lib/useDragCreate";
-import type { Category } from "../types";
+import { useBlockDrag } from "../lib/useBlockDrag";
+import type { Block, Category } from "../types";
 import { XSmall } from "./icons";
 
 function blockStyle(cat: Category): React.CSSProperties {
@@ -28,17 +29,34 @@ function blockStyle(cat: Category): React.CSSProperties {
 
 type Props = {
   onCreateRange: (r: Range) => void;
+  onEdit: (block: Block) => void;
 };
 
-export function WeekView({ onCreateRange }: Props) {
+export function WeekView({ onCreateRange, onEdit }: Props) {
   const blocks = useStore((s) => s.blocks);
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const deleteBlock = useStore((s) => s.deleteBlock);
-  const focusDay = useStore((s) => s.focusDay);
+  const updateBlock = useStore((s) => s.updateBlock);
 
-  const { preview, onPointerDown, onPointerMove, onPointerUp } =
-    useDragCreate(onCreateRange);
+  // one click selects (highlights) a block; a second click on the selected
+  // block opens the editor. Only a selected block can be dragged to move.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const create = useDragCreate(onCreateRange);
+  const drag = useBlockDrag({
+    onMove: (id, start, end) =>
+      updateBlock(id, { startMinutes: start, endMinutes: end }),
+    onTap: (block) => {
+      if (selectedId === block.id) {
+        setSelectedId(null); // opening the editor returns to neutral
+        onEdit(block);
+      } else {
+        setSelectedId(block.id);
+      }
+    },
+    canDrag: (block) => selectedId === block.id,
+  });
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -86,25 +104,37 @@ export function WeekView({ onCreateRange }: Props) {
                 key={d}
                 className="day-col"
                 style={{ height: GRID_HEIGHT }}
-                onPointerDown={(e) => onPointerDown(e, d)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
+                onPointerDown={(e) => {
+                  // pressing empty space deselects, then may start a create-drag
+                  if (e.target === e.currentTarget) setSelectedId(null);
+                  create.onPointerDown(e, d);
+                }}
+                onPointerMove={create.onPointerMove}
+                onPointerUp={create.onPointerUp}
               >
                 {dayBlocks.map((b) => {
                   const cat = catById(b.categoryId);
                   if (!cat) return null;
-                  const top = offsetForMinutes(b.startMinutes);
+                  const isDragging = drag.live?.id === b.id;
+                  const startM = isDragging ? drag.live!.start : b.startMinutes;
+                  const endM = isDragging ? drag.live!.end : b.endMinutes;
+                  const top = offsetForMinutes(startM);
                   const height = Math.max(
                     26,
-                    ((b.endMinutes - b.startMinutes) / 60) * HOUR_H - 2
+                    ((endM - startM) / 60) * HOUR_H - 2
                   );
+                  const selected = selectedId === b.id;
                   return (
                     <div
                       key={b.id}
-                      className="block"
+                      className={`block${selected ? " selected" : ""}${
+                        isDragging ? " dragging" : ""
+                      }`}
                       style={{ top, height, ...blockStyle(cat) }}
-                      onClick={() => focusDay(d, b.startMinutes)}
-                      title="Open in day view"
+                      onPointerDown={(e) => drag.onPointerDown(e, b)}
+                      onPointerMove={drag.onPointerMove}
+                      onPointerUp={drag.onPointerUp}
+                      title={selected ? "Click again to edit, or drag to move" : "Click to select"}
                     >
                       <button
                         className="b-del"
@@ -112,6 +142,7 @@ export function WeekView({ onCreateRange }: Props) {
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (selectedId === b.id) setSelectedId(null);
                           deleteBlock(b.id);
                         }}
                       >
@@ -119,20 +150,20 @@ export function WeekView({ onCreateRange }: Props) {
                       </button>
                       <span className="b-title">{b.title || cat.name}</span>
                       <span className="b-time">
-                        {fmtTime(b.startMinutes)} – {fmtTime(b.endMinutes)}
+                        {fmtTime(startM)} – {fmtTime(endM)}
                       </span>
                     </div>
                   );
                 })}
-                {preview && preview.day === d && (
+                {create.preview && create.preview.day === d && (
                   <div
                     className="drag-preview"
                     style={{
-                      top: offsetForMinutes(preview.start),
+                      top: offsetForMinutes(create.preview.start),
                       height: Math.max(
                         2,
-                        offsetForMinutes(preview.end) -
-                          offsetForMinutes(preview.start)
+                        offsetForMinutes(create.preview.end) -
+                          offsetForMinutes(create.preview.start)
                       ),
                     }}
                   />

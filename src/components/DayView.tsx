@@ -12,7 +12,8 @@ import {
   scrollToNowTop,
 } from "../lib/time";
 import { useDragCreate, type Range } from "../lib/useDragCreate";
-import type { Category } from "../types";
+import { useBlockDrag } from "../lib/useBlockDrag";
+import type { Block, Category } from "../types";
 import { XSmall } from "./icons";
 
 function blockStyle(cat: Category): React.CSSProperties {
@@ -25,9 +26,10 @@ function blockStyle(cat: Category): React.CSSProperties {
 
 type Props = {
   onCreateRange: (r: Range) => void;
+  onEdit: (block: Block) => void;
 };
 
-export function DayView({ onCreateRange }: Props) {
+export function DayView({ onCreateRange, onEdit }: Props) {
   const blocks = useStore((s) => s.blocks);
   const tasks = useStore((s) => s.tasks);
   const categories = useStore((s) => s.categories);
@@ -37,8 +39,14 @@ export function DayView({ onCreateRange }: Props) {
   const deleteBlock = useStore((s) => s.deleteBlock);
   const updateBlock = useStore((s) => s.updateBlock);
 
-  const { preview, onPointerDown, onPointerMove, onPointerUp } =
-    useDragCreate(onCreateRange);
+  const create = useDragCreate(onCreateRange);
+  // direct drag to move a block; a plain tap opens the editor
+  const drag = useBlockDrag({
+    onMove: (id, start, end) =>
+      updateBlock(id, { startMinutes: start, endMinutes: end }),
+    onTap: (block) => onEdit(block),
+    canDrag: () => true,
+  });
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
@@ -83,25 +91,31 @@ export function DayView({ onCreateRange }: Props) {
           <div
             className="dt-track"
             style={{ height: GRID_HEIGHT }}
-            onPointerDown={(e) => onPointerDown(e, selectedDay)}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
+            onPointerDown={(e) => create.onPointerDown(e, selectedDay)}
+            onPointerMove={create.onPointerMove}
+            onPointerUp={create.onPointerUp}
           >
             {dayBlocks.map((b) => {
               const cat = catById(b.categoryId);
               if (!cat) return null;
-              const top = offsetForMinutes(b.startMinutes);
+              const isDragging = drag.live?.id === b.id;
+              const startM = isDragging ? drag.live!.start : b.startMinutes;
+              const endM = isDragging ? drag.live!.end : b.endMinutes;
+              const top = offsetForMinutes(startM);
               const blockTasks = tasks.filter((t) => t.blockId === b.id);
               const minH = 64 + blockTasks.length * 24 + 48;
               const height = Math.max(
                 minH,
-                ((b.endMinutes - b.startMinutes) / 60) * HOUR_H - 4
+                ((endM - startM) / 60) * HOUR_H - 4
               );
               return (
                 <div
                   key={b.id}
-                  className="dt-block"
+                  className={`dt-block${isDragging ? " dragging" : ""}`}
                   style={{ top, height, ...blockStyle(cat) }}
+                  onPointerDown={(e) => drag.onPointerDown(e, b)}
+                  onPointerMove={drag.onPointerMove}
+                  onPointerUp={drag.onPointerUp}
                 >
                   <div className="dt-head">
                     <span
@@ -111,7 +125,7 @@ export function DayView({ onCreateRange }: Props) {
                       {cat.name.toUpperCase()}
                     </span>
                     <span className="dt-title">{b.title || cat.name}</span>
-                    <span className="dt-time">{fmtTime(b.startMinutes)}</span>
+                    <span className="dt-time">{fmtTime(startM)}</span>
                     <button
                       className="dt-del"
                       aria-label="Delete block"
@@ -143,14 +157,15 @@ export function DayView({ onCreateRange }: Props) {
                 </div>
               );
             })}
-            {preview && preview.day === selectedDay && (
+            {create.preview && create.preview.day === selectedDay && (
               <div
                 className="dt-drag-preview"
                 style={{
-                  top: offsetForMinutes(preview.start),
+                  top: offsetForMinutes(create.preview.start),
                   height: Math.max(
                     2,
-                    offsetForMinutes(preview.end) - offsetForMinutes(preview.start)
+                    offsetForMinutes(create.preview.end) -
+                      offsetForMinutes(create.preview.start)
                   ),
                 }}
               />

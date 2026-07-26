@@ -141,8 +141,10 @@ input{font-family:inherit;}
 
 .block{
   position:absolute;left:4px;right:4px;border-radius:9px;
-  border:1px solid;padding:7px 9px;overflow:hidden;cursor:pointer;
+  border:1px solid;padding:7px 9px;overflow:hidden;cursor:pointer;touch-action:none;
 }
+.block.selected{outline:2px solid var(--accent);outline-offset:1px;cursor:grab;z-index:4;box-shadow:0 4px 16px rgba(0,0,0,.35);}
+.block.dragging,.dt-block.dragging{cursor:grabbing;opacity:.92;z-index:7;box-shadow:0 8px 24px rgba(0,0,0,.4);}
 .block .b-title{font-size:11px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .block .b-time{font-size:9.5px;color:var(--text-faint);display:block;margin-top:1px;}
 .block .b-del{position:absolute;top:3px;right:3px;opacity:0;background:transparent;border:none;color:inherit;cursor:pointer;padding:2px;line-height:0;}
@@ -160,7 +162,7 @@ input{font-family:inherit;}
 .dt-now-line::before{content:"";position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:#f2555a;}
 .dt-block{
   position:absolute;left:10px;right:10px;border-radius:12px;border:1px solid;
-  padding:10px 14px;overflow:hidden;
+  padding:10px 14px;overflow:hidden;cursor:grab;touch-action:none;
 }
 .dt-block .dt-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
 .dt-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:5px;}
@@ -287,6 +289,8 @@ select,.text-input{
   background:transparent;border:1px solid var(--border);color:var(--text-dim);
   border-radius:9px;padding:9px 16px;font-size:13px;cursor:pointer;
 }
+.btn-danger{color:var(--danger);border-color:transparent;}
+.btn-danger:hover{border-color:var(--danger);}
 
 /* allocation panel */
 .alloc-row{

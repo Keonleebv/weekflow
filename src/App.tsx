@@ -10,6 +10,7 @@ import { TaskList } from "./components/TaskList";
 import { GCalCard } from "./components/GCalCard";
 import { AddBlockModal } from "./components/AddBlockModal";
 import { AllocationModal } from "./components/AllocationModal";
+import type { Block } from "./types";
 
 type Prefill = { day: number; start: number; end: number };
 
@@ -17,6 +18,7 @@ function App() {
   const view = useStore((s) => s.view);
   const [blockOpen, setBlockOpen] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
+  const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [allocOpen, setAllocOpen] = useState(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
@@ -28,15 +30,28 @@ function App() {
   }, []);
 
   const openAdd = useCallback((p: Prefill | null = null) => {
+    setEditingBlock(null);
     setPrefill(p);
     setBlockOpen(true);
+  }, []);
+
+  const openEdit = useCallback((block: Block) => {
+    setPrefill(null);
+    setEditingBlock(block);
+    setBlockOpen(true);
+  }, []);
+
+  const closeBlock = useCallback(() => {
+    setBlockOpen(false);
+    setEditingBlock(null);
+    setPrefill(null);
   }, []);
 
   // "c" keyboard shortcut for Add Block
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setBlockOpen(false);
+        closeBlock();
         setAllocOpen(false);
         return;
       }
@@ -50,7 +65,7 @@ function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [blockOpen, allocOpen, openAdd]);
+  }, [blockOpen, allocOpen, openAdd, closeBlock]);
 
   // re-render every minute to move the now-line
   const [, force] = useState(0);
@@ -67,9 +82,9 @@ function App() {
         <TopBar onAddBlock={() => openAdd()} />
         {view === "day" && <DayPills />}
         {view === "week" ? (
-          <WeekView onCreateRange={openAdd} />
+          <WeekView onCreateRange={openAdd} onEdit={openEdit} />
         ) : (
-          <DayView onCreateRange={openAdd} />
+          <DayView onCreateRange={openAdd} onEdit={openEdit} />
         )}
       </div>
 
@@ -84,8 +99,9 @@ function App() {
       <AddBlockModal
         open={blockOpen}
         prefill={prefill}
-        onClose={() => setBlockOpen(false)}
-        onSaved={() => showToast("Block added")}
+        editing={editingBlock}
+        onClose={closeBlock}
+        onSaved={(msg) => showToast(msg)}
       />
       <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} />
 
