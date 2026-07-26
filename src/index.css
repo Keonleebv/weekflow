@@ -124,7 +124,7 @@ input{font-family:inherit;}
 .week-header .hd .dnum{font-size:14px;font-weight:600;color:var(--text-dim);margin-top:2px;}
 .week-header .hd.is-today .dname,.week-header .hd.is-today .dnum{color:var(--accent);}
 
-.grid-scroll{flex:1;overflow-y:auto;padding:0 14px 40px 22px;}
+.grid-scroll{flex:1;overflow-y:auto;padding:12px 14px 40px 22px;}
 .grid{display:grid;grid-template-columns:52px repeat(7,1fr);position:relative;}
 .hour-labels{position:relative;}
 .hour-label{
@@ -150,7 +150,7 @@ input{font-family:inherit;}
 .block .b-del:hover{opacity:1;}
 
 /* day timeline (day view, bigger cards) */
-.day-timeline-scroll{flex:1;overflow-y:auto;padding:0 22px 40px;}
+.day-timeline-scroll{flex:1;overflow-y:auto;padding:12px 22px 40px;}
 .day-timeline{position:relative;display:grid;grid-template-columns:56px 1fr;}
 .dt-labels{position:relative;}
 .dt-track{position:relative;border-left:1px solid var(--border-soft);cursor:crosshair;touch-action:none;
