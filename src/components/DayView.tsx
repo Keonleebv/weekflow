@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import {
   GRID_START_H,
@@ -39,13 +39,23 @@ export function DayView({ onCreateRange, onEdit }: Props) {
   const deleteBlock = useStore((s) => s.deleteBlock);
   const updateBlock = useStore((s) => s.updateBlock);
 
+  // one click selects (highlights); a second click on the selected block opens
+  // the editor. Only a selected block can be dragged to move/resize.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   const create = useDragCreate(onCreateRange);
-  // direct drag to move a block; a plain tap opens the editor
   const drag = useBlockDrag({
     onMove: (id, start, end) =>
       updateBlock(id, { startMinutes: start, endMinutes: end }),
-    onTap: (block) => onEdit(block),
-    canDrag: () => true,
+    onTap: (block) => {
+      if (selectedId === block.id) {
+        setSelectedId(null); // opening the editor returns to neutral
+        onEdit(block);
+      } else {
+        setSelectedId(block.id);
+      }
+    },
+    canDrag: (block) => selectedId === block.id,
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -91,7 +101,10 @@ export function DayView({ onCreateRange, onEdit }: Props) {
           <div
             className="dt-track"
             style={{ height: GRID_HEIGHT }}
-            onPointerDown={(e) => create.onPointerDown(e, selectedDay)}
+            onPointerDown={(e) => {
+              if (e.target === e.currentTarget) setSelectedId(null);
+              create.onPointerDown(e, selectedDay);
+            }}
             onPointerMove={create.onPointerMove}
             onPointerUp={create.onPointerUp}
           >
@@ -108,14 +121,22 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                 minH,
                 ((endM - startM) / 60) * HOUR_H - 4
               );
+              const selected = selectedId === b.id;
               return (
                 <div
                   key={b.id}
-                  className={`dt-block${isDragging ? " dragging" : ""}`}
+                  className={`dt-block${selected ? " selected" : ""}${
+                    isDragging ? " dragging" : ""
+                  }`}
                   style={{ top, height, ...blockStyle(cat) }}
                   onPointerDown={(e) => drag.onPointerDown(e, b)}
                   onPointerMove={drag.onPointerMove}
                   onPointerUp={drag.onPointerUp}
+                  title={
+                    selected
+                      ? "Drag to move, drag edges to resize, click to edit"
+                      : "Click to select"
+                  }
                 >
                   <div className="dt-head">
                     <span
@@ -129,7 +150,10 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                     <button
                       className="dt-del"
                       aria-label="Delete block"
-                      onClick={() => deleteBlock(b.id)}
+                      onClick={() => {
+                        if (selectedId === b.id) setSelectedId(null);
+                        deleteBlock(b.id);
+                      }}
                     >
                       <XSmall />
                     </button>
@@ -154,6 +178,26 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                     onPointerDown={(e) => e.stopPropagation()}
                     onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
                   />
+                  {selected && (
+                    <>
+                      <div
+                        className="resize-handle top"
+                        onPointerDown={(e) =>
+                          drag.onPointerDown(e, b, "resize-start")
+                        }
+                        onPointerMove={drag.onPointerMove}
+                        onPointerUp={drag.onPointerUp}
+                      />
+                      <div
+                        className="resize-handle bottom"
+                        onPointerDown={(e) =>
+                          drag.onPointerDown(e, b, "resize-end")
+                        }
+                        onPointerMove={drag.onPointerMove}
+                        onPointerUp={drag.onPointerUp}
+                      />
+                    </>
+                  )}
                 </div>
               );
             })}

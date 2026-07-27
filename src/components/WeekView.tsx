@@ -134,7 +134,11 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
                       onPointerDown={(e) => drag.onPointerDown(e, b)}
                       onPointerMove={drag.onPointerMove}
                       onPointerUp={drag.onPointerUp}
-                      title={selected ? "Click again to edit, or drag to move" : "Click to select"}
+                      title={
+                        selected
+                          ? "Drag to move, drag edges to resize, click to edit"
+                          : "Click to select"
+                      }
                     >
                       <button
                         className="b-del"
@@ -152,6 +156,26 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
                       <span className="b-time">
                         {fmtTime(startM)} – {fmtTime(endM)}
                       </span>
+                      {selected && (
+                        <>
+                          <div
+                            className="resize-handle top"
+                            onPointerDown={(e) =>
+                              drag.onPointerDown(e, b, "resize-start")
+                            }
+                            onPointerMove={drag.onPointerMove}
+                            onPointerUp={drag.onPointerUp}
+                          />
+                          <div
+                            className="resize-handle bottom"
+                            onPointerDown={(e) =>
+                              drag.onPointerDown(e, b, "resize-end")
+                            }
+                            onPointerMove={drag.onPointerMove}
+                            onPointerUp={drag.onPointerUp}
+                          />
+                        </>
+                      )}
                     </div>
                   );
                 })}
