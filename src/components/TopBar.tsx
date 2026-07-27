@@ -12,8 +12,8 @@ export function TopBar({ onAddBlock }: Props) {
   const mode = useStore((s) => s.mode);
   const variant = useStore((s) => s.journalVariant);
   const setJournalVariant = useStore((s) => s.setJournalVariant);
-  const journalSidebarOpen = useStore((s) => s.journalSidebarOpen);
-  const toggleJournalSidebar = useStore((s) => s.toggleJournalSidebar);
+  const sidebarOpen = useStore((s) => s.sidebarOpen);
+  const toggleSidebar = useStore((s) => s.toggleSidebar);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const prevWeek = useStore((s) => s.prevWeek);
   const nextWeek = useStore((s) => s.nextWeek);
@@ -25,6 +25,17 @@ export function TopBar({ onAddBlock }: Props) {
   const yearStr = sameYear ? format(sunday, "yyyy") : "";
 
   const isJournal = mode === "journal";
+
+  const collapseBtn = (
+    <button
+      className={`sidebar-toggle-btn ${sidebarOpen ? "" : "collapsed"}`}
+      onClick={toggleSidebar}
+      title={sidebarOpen ? "Hide overview panel" : "Show overview panel"}
+      aria-label="Toggle overview panel"
+    >
+      <PanelIcon />
+    </button>
+  );
 
   return (
     <div className="topbar">
@@ -57,14 +68,7 @@ export function TopBar({ onAddBlock }: Props) {
               Freeform Only
             </button>
           </div>
-          <button
-            className={`sidebar-toggle-btn ${journalSidebarOpen ? "" : "collapsed"}`}
-            onClick={toggleJournalSidebar}
-            title={journalSidebarOpen ? "Hide overview panel" : "Show overview panel"}
-            aria-label="Toggle overview panel"
-          >
-            <PanelIcon />
-          </button>
+          {collapseBtn}
         </>
       ) : (
         <>
@@ -86,6 +90,7 @@ export function TopBar({ onAddBlock }: Props) {
             <PlusIcon />
             Add Block
           </button>
+          {collapseBtn}
         </>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useStore } from "../store";
-import { CalendarIcon, SlidersIcon, GearIcon, BookIcon } from "./icons";
+import { CalendarIcon, SlidersIcon, BookIcon } from "./icons";
 
 type Props = {
   onOpenAllocation: () => void;
@@ -36,16 +36,6 @@ export function Rail({ onOpenAllocation }: Props) {
           onClick={() => setMode("journal")}
         >
           <BookIcon />
-        </button>
-      </div>
-      <div className="rail-bottom">
-        <button
-          className="rail-btn"
-          title="Settings"
-          aria-label="Settings"
-          onClick={onOpenAllocation}
-        >
-          <GearIcon />
         </button>
       </div>
     </div>

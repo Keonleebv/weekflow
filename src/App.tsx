@@ -18,7 +18,7 @@ type Prefill = { day: number; start: number; end: number };
 function App() {
   const view = useStore((s) => s.view);
   const mode = useStore((s) => s.mode);
-  const journalSidebarOpen = useStore((s) => s.journalSidebarOpen);
+  const sidebarOpen = useStore((s) => s.sidebarOpen);
   const [blockOpen, setBlockOpen] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [editingBlock, setEditingBlock] = useState<Block | null>(null);
@@ -77,10 +77,7 @@ function App() {
     return () => window.clearInterval(id);
   }, []);
 
-  const shellClass =
-    mode === "journal" && !journalSidebarOpen
-      ? "app-shell sidebar-collapsed"
-      : "app-shell";
+  const shellClass = sidebarOpen ? "app-shell" : "app-shell sidebar-collapsed";
 
   return (
     <div className={shellClass}>

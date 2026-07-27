@@ -25,7 +25,7 @@ type State = {
   currentWeekStart: string;
   journalEntries: Record<number, JournalEntry>;
   journalVariant: JournalVariant;
-  journalSidebarOpen: boolean; // Journal-mode-only sidebar collapse state
+  sidebarOpen: boolean; // overview/task sidebar collapse (both modes)
   // transient: minute-of-day that Day view should scroll to on next mount
   // (set when jumping from a Week-view block). Not persisted.
   pendingScrollMinutes: number | null;
@@ -53,7 +53,7 @@ type Actions = {
   deleteCategory: (id: string) => void;
 
   setJournalVariant: (v: JournalVariant) => void;
-  toggleJournalSidebar: () => void;
+  toggleSidebar: () => void;
   setJournalMood: (day: number, mood: Mood) => void;
   setJournalOverall: (day: number, text: string) => void;
   setJournalBlockNote: (day: number, blockId: string, text: string) => void;
@@ -135,7 +135,7 @@ function seed(): State {
     currentWeekStart,
     journalEntries: {},
     journalVariant: "block",
-    journalSidebarOpen: true,
+    sidebarOpen: true,
     pendingScrollMinutes: null,
   };
 }
@@ -232,8 +232,7 @@ export const useStore = create<State & Actions>()(
       },
 
       setJournalVariant: (journalVariant) => set({ journalVariant }),
-      toggleJournalSidebar: () =>
-        set((s) => ({ journalSidebarOpen: !s.journalSidebarOpen })),
+      toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       setJournalMood: (day, mood) =>
         set((s) => {
           const entry = s.journalEntries[day] ?? blankEntry();
@@ -292,7 +291,7 @@ export const useStore = create<State & Actions>()(
         currentWeekStart: s.currentWeekStart,
         journalEntries: s.journalEntries,
         journalVariant: s.journalVariant,
-        journalSidebarOpen: s.journalSidebarOpen,
+        sidebarOpen: s.sidebarOpen,
       }),
     }
   )
