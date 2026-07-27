@@ -12,8 +12,9 @@ import type {
   Task,
   View,
 } from "./types";
+import { track } from "@vercel/analytics";
 import { nextUnusedColor } from "./lib/palette";
-import { uid, weekStartISO } from "./lib/time";
+import { uid, weekStartISO, todayIndexInWeek } from "./lib/time";
 
 type State = {
   categories: Category[];
@@ -26,6 +27,7 @@ type State = {
   journalEntries: Record<number, JournalEntry>;
   journalVariant: JournalVariant;
   sidebarOpen: boolean; // overview/task sidebar collapse (both modes)
+  onboarded: boolean; // false only for a genuine new user (first-run carousel)
   // transient: minute-of-day that Day view should scroll to on next mount
   // (set when jumping from a Week-view block). Not persisted.
   pendingScrollMinutes: number | null;
@@ -54,6 +56,7 @@ type Actions = {
 
   setJournalVariant: (v: JournalVariant) => void;
   toggleSidebar: () => void;
+  completeOnboarding: () => void;
   setJournalMood: (day: number, mood: Mood) => void;
   setJournalOverall: (day: number, text: string) => void;
   setJournalBlockNote: (day: number, blockId: string, text: string) => void;
@@ -67,75 +70,30 @@ const blankEntry = (): JournalEntry => ({
   summary: null,
 });
 
-function seed(): State {
+// A genuine new user starts here: three generic starter categories with no
+// weekly goals set yet (Allocation options is where they'd set those), and
+// nothing scheduled, tasked, or journaled. `onboarded: false` triggers the
+// first-run carousel. (The old demo week lives only in git history.)
+function blankState(): State {
   const currentWeekStart = weekStartISO(new Date());
+  const todayIdx = todayIndexInWeek(currentWeekStart);
   const categories: Category[] = [
-    { id: "c1", name: "App Dev", color: "#7c6cf6", weeklyGoalHours: 14 },
-    { id: "c2", name: "Resume & Career", color: "#34d399", weeklyGoalHours: 6 },
-    { id: "c3", name: "Personal Projects", color: "#f2a93b", weeklyGoalHours: 8 },
-    { id: "c4", name: "Exercise", color: "#f2555a", weeklyGoalHours: 5 },
-    { id: "c5", name: "Learning", color: "#c084fc", weeklyGoalHours: 5 },
-    { id: "c6", name: "Other", color: "#94a3b8", weeklyGoalHours: 2 },
+    { id: "g1", name: "Work", color: "#7c6cf6" },
+    { id: "g2", name: "Personal", color: "#34d399" },
+    { id: "g3", name: "Health", color: "#f2555a" },
   ];
-  const B = (
-    categoryId: string,
-    day: number,
-    startMinutes: number,
-    endMinutes: number,
-    title = ""
-  ): Block => ({
-    id: uid("b"),
-    categoryId,
-    day,
-    startMinutes,
-    endMinutes,
-    title,
-    weekOf: currentWeekStart,
-  });
-  const blocks: Block[] = [
-    B("c4", 0, 420, 480), B("c1", 0, 540, 660), B("c6", 0, 720, 750, "Lunch Break"), B("c2", 0, 840, 960), B("c5", 0, 1140, 1200),
-    B("c4", 1, 420, 480), B("c1", 1, 540, 720), B("c3", 1, 840, 900), B("c5", 1, 1140, 1200),
-    B("c4", 2, 420, 480), B("c1", 2, 540, 660), B("c6", 2, 720, 750, "Lunch Break"), B("c3", 2, 840, 960), B("c2", 2, 960, 1020),
-    B("c4", 3, 420, 480), B("c1", 3, 540, 720), B("c6", 3, 720, 750, "Lunch Break"), B("c3", 3, 840, 960), B("c5", 3, 1140, 1200),
-    B("c4", 4, 420, 480), B("c1", 4, 540, 780), B("c6", 4, 780, 810, "Lunch Break"), B("c2", 4, 840, 960),
-    B("c3", 5, 600, 780),
-    B("c5", 6, 900, 960), B("c2", 6, 960, 1020),
-  ];
-  const byDayCat = (day: number, cat: string) =>
-    blocks.find((b) => b.day === day && b.categoryId === cat)!;
-  const wedApp = byDayCat(2, "c1");
-  const wedEx = byDayCat(2, "c4");
-  const wedLunch = byDayCat(2, "c6");
-  const wedPP = byDayCat(2, "c3");
-  const wedRC = byDayCat(2, "c2");
-  const T = (
-    blockId: string,
-    categoryId: string,
-    title: string,
-    done: boolean
-  ): Task => ({ id: uid("t"), blockId, categoryId, title, done, createdAt: new Date().toISOString() });
-  const tasks: Task[] = [
-    T(wedEx.id, "c4", "Morning run", true),
-    T(wedApp.id, "c1", "Auth flow", true),
-    T(wedApp.id, "c1", "Fix API bug", true),
-    T(wedApp.id, "c1", "Repo setup", true),
-    T(wedLunch.id, "c6", "Step outside", false),
-    T(wedPP.id, "c3", "Write blog post draft", true),
-    T(wedPP.id, "c3", "Update portfolio", true),
-    T(wedRC.id, "c2", "Tailor resume for Anthropic", false),
-  ];
-
   return {
     categories,
-    blocks,
-    tasks,
+    blocks: [],
+    tasks: [],
     view: "week",
     mode: "planner",
-    selectedDay: 2,
+    selectedDay: todayIdx >= 0 ? todayIdx : 0,
     currentWeekStart,
     journalEntries: {},
     journalVariant: "block",
     sidebarOpen: true,
+    onboarded: false,
     pendingScrollMinutes: null,
   };
 }
@@ -143,7 +101,7 @@ function seed(): State {
 export const useStore = create<State & Actions>()(
   persist(
     (set, get) => ({
-      ...seed(),
+      ...blankState(),
 
       setView: (view) => set({ view }),
       setMode: (mode) => set({ mode }),
@@ -166,13 +124,15 @@ export const useStore = create<State & Actions>()(
           ),
         })),
 
-      addBlock: (b) =>
+      addBlock: (b) => {
         set((s) => ({
           blocks: [
             ...s.blocks,
             { ...b, id: uid("b"), weekOf: b.weekOf ?? s.currentWeekStart },
           ],
-        })),
+        }));
+        track("block_created");
+      },
       updateBlock: (id, patch) =>
         set((s) => ({
           blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
@@ -197,16 +157,20 @@ export const useStore = create<State & Actions>()(
             },
           ],
         })),
-      toggleTask: (id) =>
+      toggleTask: (id) => {
+        const t = get().tasks.find((x) => x.id === id);
+        const becomingDone = t ? !t.done : false;
         set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id ? { ...t, done: !t.done } : t
+          tasks: s.tasks.map((x) =>
+            x.id === id ? { ...x, done: !x.done } : x
           ),
-        })),
+        }));
+        if (becomingDone) track("task_completed");
+      },
       deleteTask: (id) =>
         set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
 
-      addCategory: () =>
+      addCategory: () => {
         set((s) => {
           const color = nextUnusedColor(s.categories.map((c) => c.color));
           return {
@@ -215,7 +179,9 @@ export const useStore = create<State & Actions>()(
               { id: uid("c"), name: "New Category", color, weeklyGoalHours: 0 },
             ],
           };
-        }),
+        });
+        track("category_created");
+      },
       updateCategory: (id, patch) =>
         set((s) => ({
           categories: s.categories.map((c) =>
@@ -233,6 +199,7 @@ export const useStore = create<State & Actions>()(
 
       setJournalVariant: (journalVariant) => set({ journalVariant }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      completeOnboarding: () => set({ onboarded: true }),
       setJournalMood: (day, mood) =>
         set((s) => {
           const entry = s.journalEntries[day] ?? blankEntry();
@@ -292,7 +259,20 @@ export const useStore = create<State & Actions>()(
         journalEntries: s.journalEntries,
         journalVariant: s.journalVariant,
         sidebarOpen: s.sidebarOpen,
+        onboarded: s.onboarded,
       }),
+      // Anyone with a pre-existing save has already seen the app — don't
+      // re-show onboarding to them just because the flag is newly added.
+      // A genuinely fresh user has no persisted state → keep onboarded:false.
+      merge: (persisted, current) => {
+        if (!persisted) return current;
+        const p = persisted as Partial<State>;
+        return {
+          ...current,
+          ...p,
+          onboarded: p.onboarded ?? true,
+        };
+      },
     }
   )
 );

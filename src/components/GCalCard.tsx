@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { track } from "@vercel/analytics";
 import type { GCalEvent } from "../types";
 
 /* Google Identity Services token client (implicit OAuth2) — client-side only.
@@ -94,6 +95,7 @@ export function GCalCard() {
         }));
         setEvents(items);
         setConnected(true);
+        track("gcal_connected");
       })
       .catch((e: Error) => setError(e.message || "Could not load events."));
   };
@@ -131,8 +133,17 @@ export function GCalCard() {
 
   return (
     <>
-      <p className="card-title" style={{ marginTop: 18 }}>
+      <p
+        className="card-title"
+        style={{ marginTop: 18, display: "flex", alignItems: "center", gap: 7 }}
+      >
         Google Calendar
+        <span
+          className="ro-badge"
+          title="Weekflow only reads your calendar — it never creates, edits, or deletes events on it."
+        >
+          Read-only
+        </span>
       </p>
 
       {!clientId && (

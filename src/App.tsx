@@ -11,6 +11,7 @@ import { TaskList } from "./components/TaskList";
 import { GCalCard } from "./components/GCalCard";
 import { AddBlockModal } from "./components/AddBlockModal";
 import { AllocationModal } from "./components/AllocationModal";
+import { Onboarding } from "./components/Onboarding";
 import type { Block } from "./types";
 
 type Prefill = { day: number; start: number; end: number };
@@ -19,12 +20,22 @@ function App() {
   const view = useStore((s) => s.view);
   const mode = useStore((s) => s.mode);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
+  const onboarded = useStore((s) => s.onboarded);
+  const setView = useStore((s) => s.setView);
   const [blockOpen, setBlockOpen] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [allocOpen, setAllocOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false); // mobile sidebar sheet
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
+
+  // A brand-new user on a phone lands in Day view (a single-day timeline fits
+  // the screen far better than a 7-column week grid). Runs once.
+  useEffect(() => {
+    if (!onboarded && window.innerWidth <= 860) setView("day");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -95,13 +106,22 @@ function App() {
         )}
       </div>
 
-      <div className="sidebar">
+      <div className={`sidebar${sheetOpen ? " sheet-open" : ""}`}>
+        <button
+          type="button"
+          className="sheet-handle"
+          onClick={() => setSheetOpen((o) => !o)}
+        >
+          Overview &amp; Tasks
+        </button>
         <OverviewCard />
         <TaskList />
         <div className="card">
           <GCalCard />
         </div>
       </div>
+
+      {!onboarded && <Onboarding />}
 
       <AddBlockModal
         open={blockOpen}

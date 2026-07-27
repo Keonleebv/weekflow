@@ -1,9 +1,16 @@
 import { useRef, useState } from "react";
 import { format } from "date-fns";
+import { track } from "@vercel/analytics";
 import { useStore } from "../store";
 import { DAY_FULL, dateForDay, fmtTime } from "../lib/time";
-import type { Mood } from "../types";
+import type { JournalEntry, Mood } from "../types";
 import { SummaryCard } from "./SummaryCard";
+
+function hasContent(e?: JournalEntry): boolean {
+  if (!e) return false;
+  if (e.overallBody && e.overallBody.trim()) return true;
+  return Object.values(e.blockNotes).some((v) => v && v.trim());
+}
 
 const MOODS: { id: Mood; emoji: string; label: string }[] = [
   { id: "rough", emoji: "😕", label: "Rough" },
@@ -19,7 +26,8 @@ export function JournalView() {
   const variant = useStore((s) => s.journalVariant);
   const blocks = useStore((s) => s.blocks);
   const categories = useStore((s) => s.categories);
-  const entry = useStore((s) => s.journalEntries[selectedDay]);
+  const journalEntries = useStore((s) => s.journalEntries);
+  const entry = journalEntries[selectedDay];
   const setJournalMood = useStore((s) => s.setJournalMood);
   const setJournalOverall = useStore((s) => s.setJournalOverall);
   const setJournalBlockNote = useStore((s) => s.setJournalBlockNote);
@@ -40,8 +48,18 @@ export function JournalView() {
   const markSaving = () => {
     setSaved("Saving…");
     window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => setSaved("Saved"), 500);
+    saveTimer.current = window.setTimeout(() => {
+      setSaved("Saved");
+      track("journal_entry_saved");
+    }, 500);
   };
+
+  // consecutive days with journal content, counting back from the selected day
+  let streak = 0;
+  for (let d = selectedDay; d >= 0; d--) {
+    if (hasContent(journalEntries[d])) streak++;
+    else break;
+  }
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const dayBlocks = blocks
@@ -60,7 +78,12 @@ export function JournalView() {
     <div className="view-panel journal-panel">
       <div className="journal-scroll">
         <div className="journal-wrap">
-          <h2 className="journal-date">{dateLabel}</h2>
+          <div className="journal-date-row">
+            <h2 className="journal-date">{dateLabel}</h2>
+            {streak > 0 && (
+              <span className="streak-badge">🔥 {streak}-day streak</span>
+            )}
+          </div>
 
           <SummaryCard day={selectedDay} />
 

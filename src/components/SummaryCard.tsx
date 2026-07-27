@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { track } from "@vercel/analytics";
 import { useStore } from "../store";
 import { hashText } from "../lib/time";
 
@@ -56,6 +57,7 @@ export function SummaryCard({ day }: Props) {
         forTextHash: currentHash,
         generatedAt: new Date().toISOString(),
       });
+      track("journal_summary_generated");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not generate summary.");
     } finally {
