@@ -41,10 +41,15 @@ export function SummaryCard({ day }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: combined }),
       });
-      if (!res.ok) throw new Error(`Summary service error (${res.status})`);
-      const data = (await res.json()) as { bullets?: string[] };
+      const data = (await res.json().catch(() => ({}))) as {
+        bullets?: string[];
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || `Summary service error (${res.status})`);
+      }
       if (!Array.isArray(data.bullets) || data.bullets.length === 0) {
-        throw new Error("No summary returned.");
+        throw new Error(data.error || "No summary returned.");
       }
       setJournalSummary(day, {
         bullets: data.bullets,
