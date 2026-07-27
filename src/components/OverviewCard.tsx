@@ -7,9 +7,12 @@ export function OverviewCard() {
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const view = useStore((s) => s.view);
+  const mode = useStore((s) => s.mode);
   const selectedDay = useStore((s) => s.selectedDay);
 
-  const scopedDay = view === "day" ? selectedDay : undefined;
+  // Journal and Day view both scope the overview to the selected day.
+  const scopedDay =
+    mode === "journal" || view === "day" ? selectedDay : undefined;
 
   const catHours = (catId: string) => {
     let bs = blocks.filter(

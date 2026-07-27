@@ -5,6 +5,7 @@ import { TopBar } from "./components/TopBar";
 import { DayPills } from "./components/DayPills";
 import { WeekView } from "./components/WeekView";
 import { DayView } from "./components/DayView";
+import { JournalView } from "./components/JournalView";
 import { OverviewCard } from "./components/OverviewCard";
 import { TaskList } from "./components/TaskList";
 import { GCalCard } from "./components/GCalCard";
@@ -16,6 +17,8 @@ type Prefill = { day: number; start: number; end: number };
 
 function App() {
   const view = useStore((s) => s.view);
+  const mode = useStore((s) => s.mode);
+  const journalSidebarOpen = useStore((s) => s.journalSidebarOpen);
   const [blockOpen, setBlockOpen] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [editingBlock, setEditingBlock] = useState<Block | null>(null);
@@ -55,7 +58,7 @@ function App() {
         setAllocOpen(false);
         return;
       }
-      if (e.key === "c" && !blockOpen && !allocOpen) {
+      if (e.key === "c" && mode === "planner" && !blockOpen && !allocOpen) {
         const tag = (document.activeElement?.tagName || "").toUpperCase();
         if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") {
           e.preventDefault();
@@ -65,7 +68,7 @@ function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [blockOpen, allocOpen, openAdd, closeBlock]);
+  }, [blockOpen, allocOpen, openAdd, closeBlock, mode]);
 
   // re-render every minute to move the now-line
   const [, force] = useState(0);
@@ -74,14 +77,21 @@ function App() {
     return () => window.clearInterval(id);
   }, []);
 
+  const shellClass =
+    mode === "journal" && !journalSidebarOpen
+      ? "app-shell sidebar-collapsed"
+      : "app-shell";
+
   return (
-    <div className="app-shell">
+    <div className={shellClass}>
       <Rail onOpenAllocation={() => setAllocOpen(true)} />
 
       <div className="content-col">
         <TopBar onAddBlock={() => openAdd()} />
-        {view === "day" && <DayPills />}
-        {view === "week" ? (
+        {(mode === "journal" || view === "day") && <DayPills />}
+        {mode === "journal" ? (
+          <JournalView />
+        ) : view === "week" ? (
           <WeekView onCreateRange={openAdd} onEdit={openEdit} />
         ) : (
           <DayView onCreateRange={openAdd} onEdit={openEdit} />

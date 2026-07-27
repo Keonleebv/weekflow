@@ -12,12 +12,19 @@ export function TaskList() {
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const view = useStore((s) => s.view);
+  const mode = useStore((s) => s.mode);
   const selectedDay = useStore((s) => s.selectedDay);
   const toggleTask = useStore((s) => s.toggleTask);
   const addTask = useStore((s) => s.addTask);
 
   const todayIdx = todayIndexInWeek(currentWeekStart);
-  const day = view === "day" ? selectedDay : todayIdx >= 0 ? todayIdx : 0;
+  // Journal and Day view both focus the selected day; Week view uses today.
+  const day =
+    mode === "journal" || view === "day"
+      ? selectedDay
+      : todayIdx >= 0
+        ? todayIdx
+        : 0;
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const dayBlocks = blocks

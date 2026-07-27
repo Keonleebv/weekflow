@@ -1,7 +1,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { addDays, format } from "date-fns";
-import type { Block, Category, Task, View } from "./types";
+import type {
+  Block,
+  Category,
+  JournalEntry,
+  JournalSummary,
+  JournalVariant,
+  Mode,
+  Mood,
+  Task,
+  View,
+} from "./types";
 import { nextUnusedColor } from "./lib/palette";
 import { uid, weekStartISO } from "./lib/time";
 
@@ -10,8 +20,12 @@ type State = {
   blocks: Block[];
   tasks: Task[];
   view: View;
+  mode: Mode;
   selectedDay: number;
   currentWeekStart: string;
+  journalEntries: Record<number, JournalEntry>;
+  journalVariant: JournalVariant;
+  journalSidebarOpen: boolean; // Journal-mode-only sidebar collapse state
   // transient: minute-of-day that Day view should scroll to on next mount
   // (set when jumping from a Week-view block). Not persisted.
   pendingScrollMinutes: number | null;
@@ -19,6 +33,7 @@ type State = {
 
 type Actions = {
   setView: (v: View) => void;
+  setMode: (m: Mode) => void;
   setSelectedDay: (d: number) => void;
   focusDay: (day: number, minutes: number) => void;
   clearPendingScroll: () => void;
@@ -36,7 +51,21 @@ type Actions = {
   addCategory: () => void;
   updateCategory: (id: string, patch: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
+
+  setJournalVariant: (v: JournalVariant) => void;
+  toggleJournalSidebar: () => void;
+  setJournalMood: (day: number, mood: Mood) => void;
+  setJournalOverall: (day: number, text: string) => void;
+  setJournalBlockNote: (day: number, blockId: string, text: string) => void;
+  setJournalSummary: (day: number, summary: JournalSummary | null) => void;
 };
+
+const blankEntry = (): JournalEntry => ({
+  mood: null,
+  overallBody: "",
+  blockNotes: {},
+  summary: null,
+});
 
 function seed(): State {
   const currentWeekStart = weekStartISO(new Date());
@@ -101,8 +130,12 @@ function seed(): State {
     blocks,
     tasks,
     view: "week",
+    mode: "planner",
     selectedDay: 2,
     currentWeekStart,
+    journalEntries: {},
+    journalVariant: "block",
+    journalSidebarOpen: true,
     pendingScrollMinutes: null,
   };
 }
@@ -113,6 +146,7 @@ export const useStore = create<State & Actions>()(
       ...seed(),
 
       setView: (view) => set({ view }),
+      setMode: (mode) => set({ mode }),
       setSelectedDay: (selectedDay) => set({ selectedDay }),
       focusDay: (day, minutes) =>
         set({ selectedDay: day, view: "day", pendingScrollMinutes: minutes }),
@@ -196,6 +230,54 @@ export const useStore = create<State & Actions>()(
           tasks: s.tasks.filter((t) => t.categoryId !== id),
         }));
       },
+
+      setJournalVariant: (journalVariant) => set({ journalVariant }),
+      toggleJournalSidebar: () =>
+        set((s) => ({ journalSidebarOpen: !s.journalSidebarOpen })),
+      setJournalMood: (day, mood) =>
+        set((s) => {
+          const entry = s.journalEntries[day] ?? blankEntry();
+          return {
+            journalEntries: {
+              ...s.journalEntries,
+              // tapping the selected mood again clears it
+              [day]: { ...entry, mood: entry.mood === mood ? null : mood },
+            },
+          };
+        }),
+      setJournalOverall: (day, text) =>
+        set((s) => {
+          const entry = s.journalEntries[day] ?? blankEntry();
+          return {
+            journalEntries: {
+              ...s.journalEntries,
+              [day]: { ...entry, overallBody: text },
+            },
+          };
+        }),
+      setJournalBlockNote: (day, blockId, text) =>
+        set((s) => {
+          const entry = s.journalEntries[day] ?? blankEntry();
+          return {
+            journalEntries: {
+              ...s.journalEntries,
+              [day]: {
+                ...entry,
+                blockNotes: { ...entry.blockNotes, [blockId]: text },
+              },
+            },
+          };
+        }),
+      setJournalSummary: (day, summary) =>
+        set((s) => {
+          const entry = s.journalEntries[day] ?? blankEntry();
+          return {
+            journalEntries: {
+              ...s.journalEntries,
+              [day]: { ...entry, summary },
+            },
+          };
+        }),
     }),
     {
       name: "weekflow-state",
@@ -205,8 +287,12 @@ export const useStore = create<State & Actions>()(
         blocks: s.blocks,
         tasks: s.tasks,
         view: s.view,
+        mode: s.mode,
         selectedDay: s.selectedDay,
         currentWeekStart: s.currentWeekStart,
+        journalEntries: s.journalEntries,
+        journalVariant: s.journalVariant,
+        journalSidebarOpen: s.journalSidebarOpen,
       }),
     }
   )

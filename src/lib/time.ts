@@ -85,3 +85,10 @@ export function scrollToNowTop(padding = 150): number {
 export function uid(prefix: string): string {
   return prefix + Math.random().toString(36).slice(2, 9);
 }
+
+/** Small stable string hash (djb2) — used to invalidate cached journal summaries. */
+export function hashText(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = (h * 33) ^ text.charCodeAt(i);
+  return (h >>> 0).toString(36);
+}

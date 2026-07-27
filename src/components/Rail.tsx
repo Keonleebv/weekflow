@@ -1,15 +1,24 @@
-import { CalendarIcon, SlidersIcon, GearIcon } from "./icons";
+import { useStore } from "../store";
+import { CalendarIcon, SlidersIcon, GearIcon, BookIcon } from "./icons";
 
 type Props = {
   onOpenAllocation: () => void;
 };
 
 export function Rail({ onOpenAllocation }: Props) {
+  const mode = useStore((s) => s.mode);
+  const setMode = useStore((s) => s.setMode);
+
   return (
     <div className="rail">
       <div className="logo-dot">W</div>
       <div className="rail-nav">
-        <button className="rail-btn active" title="Planner" aria-label="Planner">
+        <button
+          className={`rail-btn ${mode === "planner" ? "active" : ""}`}
+          title="Planner"
+          aria-label="Planner"
+          onClick={() => setMode("planner")}
+        >
           <CalendarIcon />
         </button>
         <button
@@ -19,6 +28,14 @@ export function Rail({ onOpenAllocation }: Props) {
           onClick={onOpenAllocation}
         >
           <SlidersIcon />
+        </button>
+        <button
+          className={`rail-btn ${mode === "journal" ? "active" : ""}`}
+          title="Journal"
+          aria-label="Journal"
+          onClick={() => setMode("journal")}
+        >
+          <BookIcon />
         </button>
       </div>
       <div className="rail-bottom">

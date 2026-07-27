@@ -56,3 +56,18 @@ export const XSmall = () => (
     <path d="M18 6L6 18M6 6l12 12" />
   </svg>
 );
+
+export const BookIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+    <path d="M9 7h7M9 11h7" />
+  </svg>
+);
+
+export const PanelIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="3" y="4" width="18" height="16" rx="3" />
+    <line x1="14" y1="4" x2="14" y2="20" />
+  </svg>
+);

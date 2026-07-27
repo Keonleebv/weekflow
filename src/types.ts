@@ -26,6 +26,23 @@ export type Task = {
 };
 
 export type View = "week" | "day";
+export type Mode = "planner" | "journal";
+export type JournalVariant = "block" | "plain";
+export type Mood = "rough" | "okay" | "good" | "great" | "fire";
+
+export type JournalSummary = {
+  bullets: string[];
+  forTextHash: string; // hash of the text it summarized — regenerate when stale
+  generatedAt: string;
+};
+
+export type JournalEntry = {
+  // keyed by day index (0=Mon..6=Sun) in the store's journalEntries record
+  mood: Mood | null;
+  overallBody: string;
+  blockNotes: Record<string, string>; // blockId -> note text ("By Block" variant)
+  summary: JournalSummary | null;
+};
 
 // Not persisted — lives only in memory for the session.
 export type GCalEvent = {
