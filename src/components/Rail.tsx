@@ -22,20 +22,22 @@ export function Rail({ onOpenAllocation }: Props) {
           <CalendarIcon />
         </button>
         <button
-          className="rail-btn"
-          title="Allocation options"
-          aria-label="Allocation options"
-          onClick={onOpenAllocation}
-        >
-          <SlidersIcon />
-        </button>
-        <button
           className={`rail-btn ${mode === "journal" ? "active" : ""}`}
           title="Journal"
           aria-label="Journal"
           onClick={() => setMode("journal")}
         >
           <BookIcon />
+        </button>
+      </div>
+      <div className="rail-bottom">
+        <button
+          className="rail-btn"
+          title="Allocation options"
+          aria-label="Allocation options"
+          onClick={onOpenAllocation}
+        >
+          <SlidersIcon />
         </button>
       </div>
     </div>
