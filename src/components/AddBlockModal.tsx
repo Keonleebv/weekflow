@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
-import { DAYS, GRID_START_H, GRID_END_H, SNAP_MIN, fmtTime } from "../lib/time";
-import type { Block } from "../types";
+import {
+  DAYS,
+  GRID_START_H,
+  GRID_END_H,
+  SNAP_MIN,
+  fmtTime,
+  datesOfWeek,
+  weekStartOfISO,
+} from "../lib/time";
+import type { Block, Recurrence } from "../types";
 import { CloseIcon } from "./icons";
 
-type Prefill = { day: number; start: number; end: number };
+type Prefill = { date: string; start: number; end: number };
 
 type Props = {
   open: boolean;
@@ -20,71 +28,91 @@ for (let m = GRID_START_H * 60; m <= GRID_END_H * 60; m += SNAP_MIN)
 
 export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Props) {
   const categories = useStore((s) => s.categories);
-  const view = useStore((s) => s.view);
-  const selectedDay = useStore((s) => s.selectedDay);
+  const selectedDate = useStore((s) => s.selectedDate);
   const addBlock = useStore((s) => s.addBlock);
   const updateBlock = useStore((s) => s.updateBlock);
   const deleteBlock = useStore((s) => s.deleteBlock);
+  const skipOccurrence = useStore((s) => s.skipOccurrence);
+  const stopRepeating = useStore((s) => s.stopRepeating);
 
   const [catId, setCatId] = useState(categories[0]?.id ?? "");
-  const [day, setDay] = useState(2);
+  const [date, setDate] = useState(selectedDate);
   const [start, setStart] = useState(9 * 60);
   const [end, setEnd] = useState(11 * 60);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [recurrence, setRecurrence] = useState<Recurrence>(null);
+  const [askDelete, setAskDelete] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setCatId(editing.categoryId);
-      setDay(editing.day);
+      setDate(editing.date);
       setStart(editing.startMinutes);
       setEnd(editing.endMinutes);
       setTitle(editing.title);
       setNotes(editing.notes ?? "");
+      setRecurrence(editing.recurrence);
     } else {
       setCatId(categories[0]?.id ?? "");
-      setDay(prefill ? prefill.day : view === "day" ? selectedDay : 2);
+      setDate(prefill ? prefill.date : selectedDate);
       setStart(prefill ? prefill.start : 9 * 60);
       setEnd(prefill ? prefill.end : 11 * 60);
       setTitle("");
       setNotes("");
+      setRecurrence(null);
     }
+    setAskDelete(false);
     setError("");
-  }, [open, editing, prefill, view, selectedDay, categories]);
+  }, [open, editing, prefill, selectedDate, categories]);
 
   if (!open) return null;
+
+  // the day-chip row reflects the week the block sits in
+  const weekDates = datesOfWeek(weekStartOfISO(date));
+  const isRecurring = !!editing && editing.recurrence !== null;
 
   const save = () => {
     if (end <= start) {
       setError("End time must be after start time.");
       return;
     }
-    const fields = {
-      categoryId: catId,
-      day,
-      startMinutes: start,
-      endMinutes: end,
-      title: title.trim(),
-      notes: notes.trim() || undefined,
-    };
     if (editing) {
-      updateBlock(editing.id, fields);
+      updateBlock(editing.id, {
+        categoryId: catId,
+        date,
+        startMinutes: start,
+        endMinutes: end,
+        title: title.trim(),
+        notes: notes.trim() || undefined,
+      });
       onSaved("Block updated");
     } else {
-      addBlock(fields);
+      addBlock({
+        categoryId: catId,
+        date,
+        startMinutes: start,
+        endMinutes: end,
+        title: title.trim(),
+        recurrence,
+        notes: notes.trim() || undefined,
+      });
       onSaved("Block added");
     }
     onClose();
   };
 
-  const removeBlock = () => {
-    if (editing) {
-      deleteBlock(editing.id);
-      onSaved("Block deleted");
-      onClose();
+  const onDeleteClick = () => {
+    if (!editing) return;
+    if (isRecurring) {
+      setAskDelete(true);
+      return;
     }
+    deleteBlock(editing.id);
+    onSaved("Block deleted");
+    onClose();
   };
 
   return (
@@ -126,8 +154,8 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
               <button
                 key={d}
                 type="button"
-                className={`chip ${i === day ? "sel" : ""}`}
-                onClick={() => setDay(i)}
+                className={`chip ${weekDates[i] === date ? "sel" : ""}`}
+                onClick={() => setDate(weekDates[i])}
               >
                 {d.toUpperCase()}
               </button>
@@ -164,6 +192,26 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
           </div>
         </div>
 
+        {!editing && (
+          <div className="field">
+            <label>Repeats</label>
+            <select
+              value={recurrence ?? "none"}
+              onChange={(e) =>
+                setRecurrence(
+                  e.target.value === "none"
+                    ? null
+                    : (e.target.value as Recurrence)
+                )
+              }
+            >
+              <option value="none">Doesn't repeat</option>
+              <option value="weekly">Every week</option>
+              <option value="biweekly">Every 2 weeks</option>
+            </select>
+          </div>
+        )}
+
         <div className="field">
           <label>Block Title (optional)</label>
           <input
@@ -186,23 +234,52 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
 
         {error && <div className="gcal-error" style={{ marginBottom: 12 }}>{error}</div>}
 
-        <div className="modal-actions">
-          {editing && (
+        {askDelete && editing ? (
+          <div className="delete-choice">
+            <p className="dc-label">This is a repeating block — what do you want to delete?</p>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                skipOccurrence(editing.id);
+                onSaved("Occurrence removed");
+                onClose();
+              }}
+            >
+              Just this occurrence
+            </button>
             <button
               className="btn-secondary btn-danger"
-              onClick={removeBlock}
-              style={{ marginRight: "auto" }}
+              onClick={() => {
+                stopRepeating(editing.id);
+                onSaved("Stopped repeating");
+                onClose();
+              }}
             >
-              Delete
+              Stop repeating (keep this one)
             </button>
-          )}
-          <button className="btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-primary" onClick={save}>
-            {editing ? "Save changes" : "Add Block"}
-          </button>
-        </div>
+            <button className="btn-secondary" onClick={() => setAskDelete(false)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="modal-actions">
+            {editing && (
+              <button
+                className="btn-secondary btn-danger"
+                onClick={onDeleteClick}
+                style={{ marginRight: "auto" }}
+              >
+                Delete
+              </button>
+            )}
+            <button className="btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn-primary" onClick={save}>
+              {editing ? "Save changes" : "Add Block"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

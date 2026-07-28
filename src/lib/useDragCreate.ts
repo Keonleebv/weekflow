@@ -1,32 +1,32 @@
 import { useRef, useState } from "react";
 import { GRID_END_H, minutesFromOffset } from "./time";
 
-export type Range = { day: number; start: number; end: number };
+export type Range = { date: string; start: number; end: number };
 
 /**
- * Pointer drag-to-create for a time column. Attach the returned handlers to a
- * track element; dragging on empty space (target === the track itself) paints a
- * preview and, on release, calls `onCreate` with a snapped {day, start, end}.
- * A near-zero drag (a tap) still yields a default 1-hour block.
+ * Pointer drag-to-create for a time column keyed by ISO date. Attach the
+ * returned handlers to a track element; dragging on empty space (target === the
+ * track itself) paints a preview and, on release, calls `onCreate` with a
+ * snapped {date, start, end}. A near-zero drag (a tap) still yields a 1-hour block.
  */
 export function useDragCreate(onCreate: (r: Range) => void) {
   const [preview, setPreview] = useState<Range | null>(null);
   const drag = useRef<{
-    day: number;
+    date: string;
     start: number;
     el: HTMLElement;
     pointerId: number;
   } | null>(null);
 
-  const onPointerDown = (e: React.PointerEvent, day: number) => {
+  const onPointerDown = (e: React.PointerEvent, date: string) => {
     // only start on the track background, not on a child block
     if (e.target !== e.currentTarget) return;
     const el = e.currentTarget as HTMLElement;
     const rect = el.getBoundingClientRect();
     const m = minutesFromOffset(e.clientY - rect.top);
     el.setPointerCapture(e.pointerId);
-    drag.current = { day, start: m, el, pointerId: e.pointerId };
-    setPreview({ day, start: m, end: m });
+    drag.current = { date, start: m, el, pointerId: e.pointerId };
+    setPreview({ date, start: m, end: m });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -35,7 +35,7 @@ export function useDragCreate(onCreate: (r: Range) => void) {
     const rect = d.el.getBoundingClientRect();
     const m = minutesFromOffset(e.clientY - rect.top);
     setPreview({
-      day: d.day,
+      date: d.date,
       start: Math.min(d.start, m),
       end: Math.max(d.start, m),
     });
@@ -57,7 +57,7 @@ export function useDragCreate(onCreate: (r: Range) => void) {
     }
     drag.current = null;
     setPreview(null);
-    onCreate({ day: d.day, start, end });
+    onCreate({ date: d.date, start, end });
   };
 
   return { preview, onPointerDown, onPointerMove, onPointerUp: finish };

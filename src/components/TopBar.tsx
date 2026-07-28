@@ -10,8 +10,6 @@ export function TopBar({ onAddBlock }: Props) {
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
   const mode = useStore((s) => s.mode);
-  const variant = useStore((s) => s.journalVariant);
-  const setJournalVariant = useStore((s) => s.setJournalVariant);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
@@ -53,23 +51,7 @@ export function TopBar({ onAddBlock }: Props) {
       </div>
 
       {isJournal ? (
-        <>
-          <div className="view-toggle" style={{ marginLeft: "auto" }}>
-            <button
-              className={variant === "block" ? "active" : ""}
-              onClick={() => setJournalVariant("block")}
-            >
-              By Block
-            </button>
-            <button
-              className={variant === "plain" ? "active" : ""}
-              onClick={() => setJournalVariant("plain")}
-            >
-              Freeform Only
-            </button>
-          </div>
-          {collapseBtn}
-        </>
+        <div style={{ marginLeft: "auto" }}>{collapseBtn}</div>
       ) : (
         <>
           <div className="view-toggle">

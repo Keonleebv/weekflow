@@ -4,7 +4,7 @@ import { useStore } from "../store";
 import { hashText } from "../lib/time";
 
 type Props = {
-  day: number;
+  date: string;
 };
 
 /**
@@ -13,8 +13,8 @@ type Props = {
  * caches the result on the journal entry (keyed by a hash of the source text so
  * reopening an unedited entry doesn't re-call the API).
  */
-export function SummaryCard({ day }: Props) {
-  const entry = useStore((s) => s.journalEntries[day]);
+export function SummaryCard({ date }: Props) {
+  const entry = useStore((s) => s.journalEntries[date]);
   const setJournalSummary = useStore((s) => s.setJournalSummary);
 
   const [loading, setLoading] = useState(false);
@@ -52,7 +52,7 @@ export function SummaryCard({ day }: Props) {
       if (!Array.isArray(data.bullets) || data.bullets.length === 0) {
         throw new Error(data.error || "No summary returned.");
       }
-      setJournalSummary(day, {
+      setJournalSummary(date, {
         bullets: data.bullets,
         forTextHash: currentHash,
         generatedAt: new Date().toISOString(),

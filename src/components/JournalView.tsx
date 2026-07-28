@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { track } from "@vercel/analytics";
 import { useStore } from "../store";
-import { DAY_FULL, dateForDay, fmtTime } from "../lib/time";
+import { fmtTime, fullDayNameISO, parseISO, addDaysISO } from "../lib/time";
 import type { JournalEntry, Mood } from "../types";
 import { SummaryCard } from "./SummaryCard";
 
@@ -21,13 +21,11 @@ const MOODS: { id: Mood; emoji: string; label: string }[] = [
 ];
 
 export function JournalView() {
-  const selectedDay = useStore((s) => s.selectedDay);
-  const currentWeekStart = useStore((s) => s.currentWeekStart);
-  const variant = useStore((s) => s.journalVariant);
+  const selectedDate = useStore((s) => s.selectedDate);
   const blocks = useStore((s) => s.blocks);
   const categories = useStore((s) => s.categories);
   const journalEntries = useStore((s) => s.journalEntries);
-  const entry = journalEntries[selectedDay];
+  const entry = journalEntries[selectedDate];
   const setJournalMood = useStore((s) => s.setJournalMood);
   const setJournalOverall = useStore((s) => s.setJournalOverall);
   const setJournalBlockNote = useStore((s) => s.setJournalBlockNote);
@@ -54,20 +52,21 @@ export function JournalView() {
     }, 500);
   };
 
-  // consecutive days with journal content, counting back from the selected day
+  // real streak: consecutive calendar days with content, back from the selected
+  // date — crosses week boundaries now that entries are keyed by ISO date.
   let streak = 0;
-  for (let d = selectedDay; d >= 0; d--) {
+  for (let d = selectedDate; ; d = addDaysISO(d, -1)) {
     if (hasContent(journalEntries[d])) streak++;
     else break;
   }
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const dayBlocks = blocks
-    .filter((b) => b.weekOf === currentWeekStart && b.day === selectedDay)
+    .filter((b) => !b.skipped && b.date === selectedDate)
     .sort((a, b) => a.startMinutes - b.startMinutes);
 
-  const dateLabel = `${DAY_FULL[selectedDay]}, ${format(
-    dateForDay(currentWeekStart, selectedDay),
+  const dateLabel = `${fullDayNameISO(selectedDate)}, ${format(
+    parseISO(selectedDate),
     "MMM d"
   )}`;
 
@@ -85,7 +84,7 @@ export function JournalView() {
             )}
           </div>
 
-          <SummaryCard day={selectedDay} />
+          <SummaryCard date={selectedDate} />
 
           <div className="mood-row">
             <span className="mr-label">How was today?</span>
@@ -95,7 +94,7 @@ export function JournalView() {
                   key={m.id}
                   type="button"
                   className={`mood-opt ${mood === m.id ? "sel" : ""}`}
-                  onClick={() => setJournalMood(selectedDay, m.id)}
+                  onClick={() => setJournalMood(selectedDate, m.id)}
                 >
                   <span className="me">{m.emoji}</span>
                   <span className="ml">{m.label}</span>
@@ -104,80 +103,72 @@ export function JournalView() {
             </div>
           </div>
 
-          {variant === "block" && (
-            <div className="journal-blocks">
-              {dayBlocks.length === 0 ? (
-                <p className="empty-note">
-                  Nothing scheduled this day — just the overall reflection below.
-                </p>
-              ) : (
-                dayBlocks.map((b) => {
-                  const cat = catById(b.categoryId);
-                  if (!cat) return null;
-                  const noteVal = entry?.blockNotes[b.id] ?? "";
-                  const isOpen = expanded.has(b.id);
-                  return (
-                    <div
-                      key={b.id}
-                      className={`block-note-card ${isOpen ? "expanded" : ""}`}
+          <div className="journal-blocks">
+            {dayBlocks.length === 0 ? (
+              <p className="empty-note">
+                Nothing scheduled this day — just the overall reflection below.
+              </p>
+            ) : (
+              dayBlocks.map((b) => {
+                const cat = catById(b.categoryId);
+                if (!cat) return null;
+                const noteVal = entry?.blockNotes[b.id] ?? "";
+                const isOpen = expanded.has(b.id);
+                return (
+                  <div
+                    key={b.id}
+                    className={`block-note-card ${isOpen ? "expanded" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="block-note-head"
+                      onClick={() => toggleExpanded(b.id)}
                     >
-                      <button
-                        type="button"
-                        className="block-note-head"
-                        onClick={() => toggleExpanded(b.id)}
-                      >
-                        <span className="dot" style={{ background: cat.color }} />
-                        <span className="bn-name">{b.title || cat.name}</span>
-                        {!isOpen && noteVal && (
-                          <span className="bn-preview">{noteVal}</span>
-                        )}
-                        <span className="bn-time">
-                          {fmtTime(b.startMinutes)}–{fmtTime(b.endMinutes)}
-                        </span>
-                        <span className="bn-chev">⌄</span>
-                      </button>
-                      {isOpen && (
-                        <div className="block-note-body">
-                          <textarea
-                            className="journal-textarea small"
-                            placeholder="Notes on this block..."
-                            value={noteVal}
-                            autoFocus
-                            onChange={(e) => {
-                              setJournalBlockNote(selectedDay, b.id, e.target.value);
-                              markSaving();
-                            }}
-                          />
-                        </div>
+                      <span className="dot" style={{ background: cat.color }} />
+                      <span className="bn-name">{b.title || cat.name}</span>
+                      {!isOpen && noteVal && (
+                        <span className="bn-preview">{noteVal}</span>
                       )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
+                      <span className="bn-time">
+                        {fmtTime(b.startMinutes)}–{fmtTime(b.endMinutes)}
+                      </span>
+                      <span className="bn-chev">⌄</span>
+                    </button>
+                    {isOpen && (
+                      <div className="block-note-body">
+                        <textarea
+                          className="journal-textarea small"
+                          placeholder="Notes on this block..."
+                          value={noteVal}
+                          autoFocus
+                          onChange={(e) => {
+                            setJournalBlockNote(selectedDate, b.id, e.target.value);
+                            markSaving();
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
 
           <div className="overall-section">
-            {variant === "block" && (
-              <span className="mr-label">
-                Overall reflection <span className="optional-tag">(optional)</span>
-              </span>
-            )}
+            <span className="mr-label">
+              Overall reflection <span className="optional-tag">(optional)</span>
+            </span>
             <textarea
               className="journal-textarea"
-              placeholder={
-                variant === "block"
-                  ? "Anything that didn't fit under a block above..."
-                  : "What stood out today?"
-              }
+              placeholder="Anything that didn't fit under a block above..."
               value={overall}
               onChange={(e) => {
-                setJournalOverall(selectedDay, e.target.value);
+                setJournalOverall(selectedDate, e.target.value);
                 markSaving();
               }}
             />
           </div>
-          <div className="journal-saved">{saved || " "}</div>
+          <div className="journal-saved">{saved || " "}</div>
         </div>
       </div>
     </div>

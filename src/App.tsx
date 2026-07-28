@@ -11,10 +11,11 @@ import { TaskList } from "./components/TaskList";
 import { GCalCard } from "./components/GCalCard";
 import { AddBlockModal } from "./components/AddBlockModal";
 import { AllocationModal } from "./components/AllocationModal";
+import { WeeklyReviewModal } from "./components/WeeklyReviewModal";
 import { Onboarding } from "./components/Onboarding";
 import type { Block } from "./types";
 
-type Prefill = { day: number; start: number; end: number };
+type Prefill = { date: string; start: number; end: number };
 
 function App() {
   const view = useStore((s) => s.view);
@@ -22,18 +23,22 @@ function App() {
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const onboarded = useStore((s) => s.onboarded);
   const setView = useStore((s) => s.setView);
+  const ensureCurrentWeek = useStore((s) => s.ensureCurrentWeek);
   const [blockOpen, setBlockOpen] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [allocOpen, setAllocOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false); // mobile sidebar sheet
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
 
   // A brand-new user on a phone lands in Day view (a single-day timeline fits
-  // the screen far better than a 7-column week grid). Runs once.
+  // the screen far better than a 7-column week grid). Also generate any
+  // recurring occurrences due in the current week. Runs once.
   useEffect(() => {
     if (!onboarded && window.innerWidth <= 860) setView("day");
+    ensureCurrentWeek();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -114,7 +119,7 @@ function App() {
         >
           Overview &amp; Tasks
         </button>
-        <OverviewCard />
+        <OverviewCard onOpenReview={() => setReviewOpen(true)} />
         <TaskList />
         <div className="card">
           <GCalCard />
@@ -131,6 +136,7 @@ function App() {
         onSaved={(msg) => showToast(msg)}
       />
       <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} />
+      <WeeklyReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} />
 
       {toast && <div className="toast">{toast}</div>}
     </div>

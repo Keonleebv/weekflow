@@ -5,15 +5,19 @@ export type Category = {
   weeklyGoalHours?: number;
 };
 
+export type Recurrence = "weekly" | "biweekly" | null;
+
 export type Block = {
   id: string;
   categoryId: string;
   title: string;
-  day: number; // 0=Mon..6=Sun
+  date: string; // ISO date (yyyy-MM-dd) this instance occurs on
   startMinutes: number; // minutes from midnight
   endMinutes: number;
-  weekOf: string; // ISO date of that week's Monday
-  notes?: string;
+  recurrence: Recurrence; // null = one-off
+  seriesId?: string; // ties every instance of a recurring series together
+  skipped?: boolean; // "delete just this occurrence" tombstone
+  notes?: string; // day-view per-block notes
 };
 
 export type Task = {
@@ -22,12 +26,12 @@ export type Task = {
   categoryId?: string;
   done: boolean;
   blockId?: string;
+  date: string; // ISO date this task belongs to (independent of blockId)
   createdAt: string;
 };
 
 export type View = "week" | "day";
 export type Mode = "planner" | "journal";
-export type JournalVariant = "block" | "plain";
 export type Mood = "rough" | "okay" | "good" | "great" | "fire";
 
 export type JournalSummary = {
@@ -37,11 +41,18 @@ export type JournalSummary = {
 };
 
 export type JournalEntry = {
-  // keyed by day index (0=Mon..6=Sun) in the store's journalEntries record
+  date: string; // ISO date — keyed by real calendar date in the store
   mood: Mood | null;
   overallBody: string;
-  blockNotes: Record<string, string>; // blockId -> note text ("By Block" variant)
+  blockNotes: Record<string, string>; // blockId -> note text
   summary: JournalSummary | null;
+};
+
+export type WeeklyDigest = {
+  weekOf: string; // ISO Monday of the week
+  bullets: string[];
+  forTextHash: string;
+  generatedAt: string;
 };
 
 // Not persisted — lives only in memory for the session.

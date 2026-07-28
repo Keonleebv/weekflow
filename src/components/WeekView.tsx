@@ -10,8 +10,9 @@ import {
   fmtTime,
   offsetForMinutes,
   nowOffset,
-  todayIndexInWeek,
-  dateForDay,
+  todayISO,
+  datesOfWeek,
+  parseISO,
   scrollToNowTop,
 } from "../lib/time";
 import { useDragCreate, type Range } from "../lib/useDragCreate";
@@ -37,7 +38,12 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const deleteBlock = useStore((s) => s.deleteBlock);
+  const skipOccurrence = useStore((s) => s.skipOccurrence);
   const updateBlock = useStore((s) => s.updateBlock);
+
+  // a recurring instance is tombstoned (won't regenerate); a one-off is removed
+  const removeBlock = (b: Block) =>
+    b.recurrence !== null ? skipOccurrence(b.id) : deleteBlock(b.id);
 
   // one click selects (highlights) a block; a second click on the selected
   // block opens the editor. Only a selected block can be dragged to move.
@@ -64,8 +70,9 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
   }, []);
 
   const catById = (id: string) => categories.find((c) => c.id === id);
-  const todayIdx = todayIndexInWeek(currentWeekStart);
-  const weekBlocks = blocks.filter((b) => b.weekOf === currentWeekStart);
+  const today = todayISO();
+  const weekDates = datesOfWeek(currentWeekStart);
+  const visibleBlocks = blocks.filter((b) => !b.skipped);
 
   const hours: number[] = [];
   for (let h = GRID_START_H; h <= GRID_END_H; h++) hours.push(h);
@@ -74,10 +81,10 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
     <div className="view-panel">
       <div className="week-header">
         <div className="hd" />
-        {DAYS.map((d, i) => (
-          <div key={d} className={`hd ${i === todayIdx ? "is-today" : ""}`}>
-            <span className="dname">{d.toUpperCase()}</span>
-            <span className="dnum">{dateForDay(currentWeekStart, i).getDate()}</span>
+        {weekDates.map((iso, i) => (
+          <div key={iso} className={`hd ${iso === today ? "is-today" : ""}`}>
+            <span className="dname">{DAYS[i].toUpperCase()}</span>
+            <span className="dnum">{parseISO(iso).getDate()}</span>
           </div>
         ))}
       </div>
@@ -94,20 +101,20 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
               </div>
             ))}
           </div>
-          {DAYS.map((_, d) => {
-            const dayBlocks = weekBlocks
-              .filter((b) => b.day === d)
+          {weekDates.map((iso) => {
+            const dayBlocks = visibleBlocks
+              .filter((b) => b.date === iso)
               .sort((a, b) => a.startMinutes - b.startMinutes);
-            const now = nowOffset(currentWeekStart, d);
+            const now = nowOffset(iso);
             return (
               <div
-                key={d}
+                key={iso}
                 className="day-col"
                 style={{ height: GRID_HEIGHT }}
                 onPointerDown={(e) => {
                   // pressing empty space deselects, then may start a create-drag
                   if (e.target === e.currentTarget) setSelectedId(null);
-                  create.onPointerDown(e, d);
+                  create.onPointerDown(e, iso);
                 }}
                 onPointerMove={create.onPointerMove}
                 onPointerUp={create.onPointerUp}
@@ -147,7 +154,7 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (selectedId === b.id) setSelectedId(null);
-                          deleteBlock(b.id);
+                          removeBlock(b);
                         }}
                       >
                         <XSmall />
@@ -179,7 +186,7 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
                     </div>
                   );
                 })}
-                {create.preview && create.preview.day === d && (
+                {create.preview && create.preview.date === iso && (
                   <div
                     className="drag-preview"
                     style={{

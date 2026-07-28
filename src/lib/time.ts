@@ -21,18 +21,44 @@ export function weekStartISO(d: Date): string {
   return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
 }
 
-/** Date object for a given day index (0=Mon) within a week starting `weekOf`. */
-export function dateForDay(weekOfISO: string, dayIdx: number): Date {
-  const monday = new Date(weekOfISO + "T00:00:00");
-  return addDays(monday, dayIdx);
+/** Today's ISO date (yyyy-MM-dd), local time. */
+export function todayISO(): string {
+  return format(new Date(), "yyyy-MM-dd");
 }
 
-/** Day index (0=Mon..6=Sun) for today, or -1 if not in `weekOfISO`. */
-export function todayIndexInWeek(weekOfISO: string): number {
-  const today = weekStartISO(new Date());
-  if (today !== weekOfISO) return -1;
-  const now = new Date();
-  return (now.getDay() + 6) % 7; // JS Sun=0 -> Mon=0 index
+/** Parse an ISO date string to a local Date at midnight. */
+export function parseISO(iso: string): Date {
+  return new Date(iso + "T00:00:00");
+}
+
+/** ISO date `n` days after `iso`. */
+export function addDaysISO(iso: string, n: number): string {
+  return format(addDays(parseISO(iso), n), "yyyy-MM-dd");
+}
+
+/** Monday (ISO) of the week containing `iso`. */
+export function weekStartOfISO(iso: string): string {
+  return weekStartISO(parseISO(iso));
+}
+
+/** The 7 ISO dates (Mon..Sun) of the week starting `weekOfISO`. */
+export function datesOfWeek(weekOfISO: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => addDaysISO(weekOfISO, i));
+}
+
+/** Day index (0=Mon..6=Sun) of an ISO date. */
+export function dayIndexOfISO(iso: string): number {
+  return (parseISO(iso).getDay() + 6) % 7;
+}
+
+/** Date object for a given day index (0=Mon) within a week starting `weekOf`. */
+export function dateForDay(weekOfISO: string, dayIdx: number): Date {
+  return addDays(parseISO(weekOfISO), dayIdx);
+}
+
+/** Full weekday name for an ISO date (e.g. "Wednesday"). */
+export function fullDayNameISO(iso: string): string {
+  return DAY_FULL[dayIndexOfISO(iso)];
 }
 
 export function fmtTime(mins: number): string {
@@ -65,9 +91,9 @@ export function minutesFromOffset(offsetPx: number): number {
   return Math.max(GRID_START_H * 60, Math.min(GRID_END_H * 60, snapped));
 }
 
-/** Now-line offset for a day, or null if today isn't that day / off-grid. */
-export function nowOffset(weekOfISO: string, dayIdx: number): number | null {
-  if (todayIndexInWeek(weekOfISO) !== dayIdx) return null;
+/** Now-line offset for an ISO date, or null if it isn't today / off-grid. */
+export function nowOffset(dateISO: string): number | null {
+  if (dateISO !== todayISO()) return null;
   const now = new Date();
   const mins = now.getHours() * 60 + now.getMinutes();
   if (mins < GRID_START_H * 60 || mins > GRID_END_H * 60) return null;

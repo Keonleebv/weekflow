@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import {
-  DAY_FULL,
   fmtTime,
-  todayIndexInWeek,
+  fullDayNameISO,
+  todayISO,
+  datesOfWeek,
 } from "../lib/time";
 
 export function TaskList() {
@@ -13,50 +14,82 @@ export function TaskList() {
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const view = useStore((s) => s.view);
   const mode = useStore((s) => s.mode);
-  const selectedDay = useStore((s) => s.selectedDay);
+  const selectedDate = useStore((s) => s.selectedDate);
   const toggleTask = useStore((s) => s.toggleTask);
   const addTask = useStore((s) => s.addTask);
 
-  const todayIdx = todayIndexInWeek(currentWeekStart);
-  // Journal and Day view both focus the selected day; Week view uses today.
-  const day =
+  const today = todayISO();
+  const weekDates = datesOfWeek(currentWeekStart);
+  // Journal / Day view focus the selected date; Week view shows today (or the
+  // shown week's Monday when today is in a different week).
+  const viewedDate =
     mode === "journal" || view === "day"
-      ? selectedDay
-      : todayIdx >= 0
-        ? todayIdx
-        : 0;
+      ? selectedDate
+      : weekDates.includes(today)
+        ? today
+        : currentWeekStart;
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const dayBlocks = blocks
-    .filter((b) => b.weekOf === currentWeekStart && b.day === day)
+    .filter((b) => !b.skipped && b.date === viewedDate)
     .sort((a, b) => a.startMinutes - b.startMinutes);
+  const dayBlockIds = new Set(dayBlocks.map((b) => b.id));
 
-  const dayBlockIds = dayBlocks.map((b) => b.id);
-  const dayTasks = tasks.filter((t) => t.blockId && dayBlockIds.includes(t.blockId));
-  const doneCount = dayTasks.filter((t) => t.done).length;
+  // date-based carryover: unfinished tasks from any earlier day (not tied to a
+  // block recurring). One row per task — this is display-only, no duplication.
+  const overdue = tasks
+    .filter((t) => !t.done && t.date < viewedDate)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  // whole-week progress across every block in the current week
-  const weekBlockIds = blocks
-    .filter((b) => b.weekOf === currentWeekStart)
-    .map((b) => b.id);
-  const weekTasks = tasks.filter(
-    (t) => t.blockId && weekBlockIds.includes(t.blockId)
+  const dayTasks = tasks.filter((t) => t.date === viewedDate);
+  const otherTasks = dayTasks.filter(
+    (t) => !t.blockId || !dayBlockIds.has(t.blockId)
   );
+
+  const doneCount = dayTasks.filter((t) => t.done).length;
+  const weekTasks = tasks.filter((t) => weekDates.includes(t.date));
   const weekDone = weekTasks.filter((t) => t.done).length;
   const pct = (done: number, total: number) =>
     total ? `${(done / total) * 100}%` : "0%";
 
+  const row = (t: (typeof tasks)[number], withDate = false) => (
+    <div className={`task-row ${t.done ? "done" : ""}`} key={t.id}>
+      <input
+        type="checkbox"
+        checked={t.done}
+        onChange={() => toggleTask(t.id)}
+        id={`tr-${t.id}`}
+      />
+      <label htmlFor={`tr-${t.id}`}>{t.title}</label>
+      {withDate && (
+        <span className="task-overdue-date">{shortDate(t.date)}</span>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="card">
-        <p className="today-label">Today — {DAY_FULL[day]}</p>
-        {dayBlocks.length === 0 ? (
+        <p className="today-label">Today — {fullDayNameISO(viewedDate)}</p>
+
+        {overdue.length > 0 && (
+          <div className="task-group carried-over">
+            <div className="task-group-head">
+              <span className="dot" style={{ background: "var(--danger)" }} />
+              <span className="tg-name">Carried over</span>
+              <span className="tg-time">{overdue.length} overdue</span>
+            </div>
+            {overdue.map((t) => row(t, true))}
+          </div>
+        )}
+
+        {dayBlocks.length === 0 && otherTasks.length === 0 ? (
           <p className="empty-note">No blocks scheduled. Add one to get started.</p>
         ) : (
           dayBlocks.map((b) => {
             const cat = catById(b.categoryId);
             if (!cat) return null;
-            const blockTasks = tasks.filter((t) => t.blockId === b.id);
+            const blockTasks = dayTasks.filter((t) => t.blockId === b.id);
             return (
               <div className="task-group" key={b.id}>
                 <div className="task-group-head">
@@ -66,21 +99,28 @@ export function TaskList() {
                     {fmtTime(b.startMinutes)}–{fmtTime(b.endMinutes)}
                   </span>
                 </div>
-                {blockTasks.map((t) => (
-                  <div className={`task-row ${t.done ? "done" : ""}`} key={t.id}>
-                    <input
-                      type="checkbox"
-                      checked={t.done}
-                      onChange={() => toggleTask(t.id)}
-                      id={`tr-${t.id}`}
-                    />
-                    <label htmlFor={`tr-${t.id}`}>{t.title}</label>
-                  </div>
-                ))}
-                <AddTaskInput blockId={b.id} categoryId={b.categoryId} onAdd={addTask} />
+                {blockTasks.map((t) => row(t))}
+                <AddTaskInput
+                  onAdd={(title) =>
+                    addTask({ title, date: viewedDate, blockId: b.id, categoryId: b.categoryId })
+                  }
+                />
               </div>
             );
           })
+        )}
+
+        {(otherTasks.length > 0 || dayBlocks.length > 0) && (
+          <div className="task-group">
+            {otherTasks.length > 0 && (
+              <div className="task-group-head">
+                <span className="dot" style={{ background: "var(--text-faint)" }} />
+                <span className="tg-name">Other</span>
+              </div>
+            )}
+            {otherTasks.map((t) => row(t))}
+            <AddTaskInput onAdd={(title) => addTask({ title, date: viewedDate })} />
+          </div>
         )}
       </div>
 
@@ -117,15 +157,12 @@ export function TaskList() {
   );
 }
 
-function AddTaskInput({
-  blockId,
-  categoryId,
-  onAdd,
-}: {
-  blockId: string;
-  categoryId: string;
-  onAdd: (t: { title: string; blockId?: string; categoryId?: string }) => void;
-}) {
+function shortDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function AddTaskInput({ onAdd }: { onAdd: (title: string) => void }) {
   const [val, setVal] = useState("");
   return (
     <div className="add-task-row">
@@ -136,7 +173,7 @@ function AddTaskInput({
         onChange={(e) => setVal(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && val.trim()) {
-            onAdd({ title: val.trim(), blockId, categoryId });
+            onAdd(val.trim());
             setVal("");
           }
         }}

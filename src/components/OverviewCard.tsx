@@ -1,40 +1,57 @@
 import { PieChart, Pie, Cell } from "recharts";
 import { useStore } from "../store";
-import { DAY_FULL, DAYS } from "../lib/time";
+import { DAYS, datesOfWeek, dayIndexOfISO, fullDayNameISO } from "../lib/time";
+import { catHoursForDates } from "../lib/stats";
 
-export function OverviewCard() {
+type Props = {
+  onOpenReview: () => void;
+};
+
+export function OverviewCard({ onOpenReview }: Props) {
   const blocks = useStore((s) => s.blocks);
   const categories = useStore((s) => s.categories);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
   const view = useStore((s) => s.view);
   const mode = useStore((s) => s.mode);
-  const selectedDay = useStore((s) => s.selectedDay);
+  const selectedDate = useStore((s) => s.selectedDate);
+  const journalEntries = useStore((s) => s.journalEntries);
+  const tasks = useStore((s) => s.tasks);
 
-  // Journal and Day view both scope the overview to the selected day.
-  const scopedDay =
-    mode === "journal" || view === "day" ? selectedDay : undefined;
+  // Journal and Day view scope the overview to the selected date.
+  const scopedDate =
+    mode === "journal" || view === "day" ? selectedDate : null;
+  const weekDates = datesOfWeek(currentWeekStart);
+  const scopeDates = scopedDate ? [scopedDate] : weekDates;
 
-  const catHours = (catId: string) => {
-    let bs = blocks.filter(
-      (b) => b.weekOf === currentWeekStart && b.categoryId === catId
-    );
-    if (scopedDay !== undefined) bs = bs.filter((b) => b.day === scopedDay);
-    return bs.reduce((s, b) => s + (b.endMinutes - b.startMinutes), 0) / 60;
-  };
+  const catHours = (catId: string) =>
+    catHoursForDates(blocks, catId, scopeDates);
 
   const totals = categories
     .map((c) => ({ cat: c, hrs: catHours(c.id) }))
     .filter((x) => x.hrs > 0);
   const total = totals.reduce((s, x) => s + x.hrs, 0);
 
-  const title =
-    scopedDay !== undefined
-      ? `Daily Overview — ${DAY_FULL[scopedDay]}`
-      : "Week Overview";
-  const subLabel = scopedDay !== undefined ? DAYS[scopedDay].toUpperCase() : "TOTAL";
+  const title = scopedDate
+    ? `Daily Overview — ${fullDayNameISO(scopedDate)}`
+    : "Week Overview";
+  const subLabel = scopedDate
+    ? DAYS[dayIndexOfISO(scopedDate)].toUpperCase()
+    : "TOTAL";
   const totalStr = total % 1 === 0 ? String(total) : total.toFixed(1);
-
   const pieData = totals.map((x) => ({ name: x.cat.name, value: x.hrs, color: x.cat.color }));
+
+  // Show the week-in-review link once the week has something worth reviewing.
+  const weekSet = new Set(weekDates);
+  const weekHasJournal = Object.values(journalEntries).some(
+    (e) =>
+      weekSet.has(e.date) &&
+      ((e.overallBody && e.overallBody.trim()) ||
+        Object.values(e.blockNotes).some((v) => v && v.trim()))
+  );
+  const weekTasksDone = tasks.filter(
+    (t) => t.done && weekSet.has(t.date)
+  ).length;
+  const showReview = !scopedDate && (weekHasJournal || weekTasksDone > 0);
 
   return (
     <div className="card">
@@ -72,7 +89,7 @@ export function OverviewCard() {
       </div>
 
       <div>
-        {scopedDay !== undefined ? (
+        {scopedDate ? (
           totals.length ? (
             totals.map((x) => (
               <div className="legend-item" key={x.cat.id}>
@@ -115,6 +132,12 @@ export function OverviewCard() {
           })
         )}
       </div>
+
+      {showReview && (
+        <button type="button" className="review-link" onClick={onOpenReview}>
+          📊 View week in review
+        </button>
+      )}
     </div>
   );
 }

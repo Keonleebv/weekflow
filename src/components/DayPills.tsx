@@ -1,24 +1,25 @@
 import { useStore } from "../store";
-import { DAYS, dateForDay, todayIndexInWeek } from "../lib/time";
+import { DAYS, datesOfWeek, parseISO, todayISO } from "../lib/time";
 
 export function DayPills() {
-  const selectedDay = useStore((s) => s.selectedDay);
-  const setSelectedDay = useStore((s) => s.setSelectedDay);
+  const selectedDate = useStore((s) => s.selectedDate);
+  const setSelectedDate = useStore((s) => s.setSelectedDate);
   const currentWeekStart = useStore((s) => s.currentWeekStart);
-  const todayIdx = todayIndexInWeek(currentWeekStart);
+  const today = todayISO();
+  const weekDates = datesOfWeek(currentWeekStart);
 
   return (
     <div className="day-pills">
-      {DAYS.map((d, i) => (
+      {weekDates.map((iso, i) => (
         <button
-          key={d}
-          className={`day-pill ${i === selectedDay ? "active" : ""} ${
-            i === todayIdx ? "is-today" : ""
+          key={iso}
+          className={`day-pill ${iso === selectedDate ? "active" : ""} ${
+            iso === today ? "is-today" : ""
           }`}
-          onClick={() => setSelectedDay(i)}
+          onClick={() => setSelectedDate(iso)}
         >
-          <span className="dname">{d.toUpperCase()}</span>
-          <span className="dnum">{dateForDay(currentWeekStart, i).getDate()}</span>
+          <span className="dname">{DAYS[i].toUpperCase()}</span>
+          <span className="dnum">{parseISO(iso).getDate()}</span>
         </button>
       ))}
     </div>

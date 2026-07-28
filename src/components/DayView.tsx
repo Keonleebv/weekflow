@@ -33,11 +33,14 @@ export function DayView({ onCreateRange, onEdit }: Props) {
   const blocks = useStore((s) => s.blocks);
   const tasks = useStore((s) => s.tasks);
   const categories = useStore((s) => s.categories);
-  const currentWeekStart = useStore((s) => s.currentWeekStart);
-  const selectedDay = useStore((s) => s.selectedDay);
+  const selectedDate = useStore((s) => s.selectedDate);
   const toggleTask = useStore((s) => s.toggleTask);
   const deleteBlock = useStore((s) => s.deleteBlock);
+  const skipOccurrence = useStore((s) => s.skipOccurrence);
   const updateBlock = useStore((s) => s.updateBlock);
+
+  const removeBlock = (b: Block) =>
+    b.recurrence !== null ? skipOccurrence(b.id) : deleteBlock(b.id);
 
   // one click selects (highlights); a second click on the selected block opens
   // the editor. Only a selected block can be dragged to move/resize.
@@ -76,9 +79,9 @@ export function DayView({ onCreateRange, onEdit }: Props) {
 
   const catById = (id: string) => categories.find((c) => c.id === id);
   const dayBlocks = blocks
-    .filter((b) => b.weekOf === currentWeekStart && b.day === selectedDay)
+    .filter((b) => !b.skipped && b.date === selectedDate)
     .sort((a, b) => a.startMinutes - b.startMinutes);
-  const now = nowOffset(currentWeekStart, selectedDay);
+  const now = nowOffset(selectedDate);
 
   const hours: number[] = [];
   for (let h = GRID_START_H; h <= GRID_END_H; h++) hours.push(h);
@@ -103,7 +106,7 @@ export function DayView({ onCreateRange, onEdit }: Props) {
             style={{ height: GRID_HEIGHT }}
             onPointerDown={(e) => {
               if (e.target === e.currentTarget) setSelectedId(null);
-              create.onPointerDown(e, selectedDay);
+              create.onPointerDown(e, selectedDate);
             }}
             onPointerMove={create.onPointerMove}
             onPointerUp={create.onPointerUp}
@@ -152,7 +155,7 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                       aria-label="Delete block"
                       onClick={() => {
                         if (selectedId === b.id) setSelectedId(null);
-                        deleteBlock(b.id);
+                        removeBlock(b);
                       }}
                     >
                       <XSmall />
@@ -201,7 +204,7 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                 </div>
               );
             })}
-            {create.preview && create.preview.day === selectedDay && (
+            {create.preview && create.preview.date === selectedDate && (
               <div
                 className="dt-drag-preview"
                 style={{
