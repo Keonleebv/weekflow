@@ -73,6 +73,10 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
   // the day-chip row reflects the week the block sits in
   const weekDates = datesOfWeek(weekStartOfISO(date));
   const isRecurring = !!editing && editing.recurrence !== null;
+  // the "driving instance" is the series original (id === seriesId) that's
+  // still repeating — edits to it flow into not-yet-generated future weeks.
+  const isDrivingInstance =
+    !!editing && editing.recurrence !== null && editing.seriesId === editing.id;
 
   const save = () => {
     if (end <= start) {
@@ -129,6 +133,13 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
             <CloseIcon />
           </button>
         </div>
+
+        {isDrivingInstance && (
+          <div className="edit-note">
+            <span>🔁</span>
+            <span>Changes here also apply to future weeks of this repeating block.</span>
+          </div>
+        )}
 
         <div className="field">
           <label>Category</label>
