@@ -6,6 +6,8 @@ import {
   dayIndexOfISO,
   fullDayNameISO,
   addDaysISO,
+  todayISO,
+  weekStartOfISO,
 } from "../lib/time";
 import { catHoursForDates } from "../lib/stats";
 
@@ -39,6 +41,17 @@ export function OverviewCard({ onOpenReview }: Props) {
     const prev = catHoursForDates(blocks, catId, prevWeekDates);
     if (prev <= 0) return null; // no prior-week data → no misleading delta
     return catHoursForDates(blocks, catId, weekDates) - prev;
+  };
+
+  // "behind pace": only for the current real week, once past its midpoint, when
+  // a category with a goal is clearly under its expected pro-rated progress.
+  const today = todayISO();
+  const isCurrentWeek = currentWeekStart === weekStartOfISO(today);
+  const dayIdxToday = dayIndexOfISO(today); // 0=Mon..6=Sun
+  const isBehindPace = (hrs: number, goal: number) => {
+    if (!isCurrentWeek || goal <= 0 || dayIdxToday < 3) return false; // Thu+
+    const expected = (goal * (dayIdxToday + 1)) / 7;
+    return hrs < expected * 0.6; // clearly under (40% below pace)
   };
 
   const totals = categories
@@ -152,6 +165,11 @@ export function OverviewCard({ onOpenReview }: Props) {
                     />
                   </div>
                 ) : null}
+                {isBehindPace(hrs, goal) && (
+                  <span className="pace-flag" title="Behind this week's pace toward the goal">
+                    ⚑ behind pace
+                  </span>
+                )}
               </div>
             );
           })

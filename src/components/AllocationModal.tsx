@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import { PALETTE } from "../lib/palette";
+import { exportJSON, exportBlocksCSV } from "../lib/export";
 import { CloseIcon, TrashIcon } from "./icons";
 
 type Props = {
@@ -115,6 +116,40 @@ export function AllocationModal({ open, onClose }: Props) {
         <button className="new-cat-btn" onClick={addCategory}>
           + New category
         </button>
+
+        <div className="export-section">
+          <p className="mr-label">Your data</p>
+          <p className="export-note">
+            Everything stays in your browser. Take it with you anytime.
+          </p>
+          <div className="export-row">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                const s = useStore.getState();
+                exportJSON({
+                  categories: s.categories,
+                  blocks: s.blocks,
+                  tasks: s.tasks,
+                  journalEntries: s.journalEntries,
+                });
+              }}
+            >
+              Export all (JSON)
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                const s = useStore.getState();
+                exportBlocksCSV(s.blocks, s.categories);
+              }}
+            >
+              Export schedule (CSV)
+            </button>
+          </div>
+        </div>
       </div>
 
       {swatchFor && (
