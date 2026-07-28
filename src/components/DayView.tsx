@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useStore } from "../store";
 import {
   GRID_START_H,
@@ -10,7 +16,6 @@ import {
   offsetForMinutes,
   nowOffset,
   scrollToNowTop,
-  isElapsed,
 } from "../lib/time";
 import { useDragCreate, type Range } from "../lib/useDragCreate";
 import { useBlockDrag } from "../lib/useBlockDrag";
@@ -24,6 +29,33 @@ function blockStyle(cat: Category): React.CSSProperties {
     borderColor: cat.color + "66",
     color: cat.color,
   };
+}
+
+/**
+ * Scrollable block body. Block height is strictly time-based (§16), so content
+ * scrolls internally instead of pushing the block taller and bleeding into the
+ * next one. A bottom fade appears only when there's more to scroll to.
+ */
+function BlockScroll({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return (
+    <>
+      <div className="dt-scroll" ref={ref}>
+        {children}
+      </div>
+      {overflowing && <div className="dt-fade" />}
+    </>
+  );
 }
 
 type Props = {
@@ -121,15 +153,10 @@ export function DayView({ onCreateRange, onEdit }: Props) {
               const endM = isDragging ? drag.live!.end : b.endMinutes;
               const top = offsetForMinutes(startM);
               const blockTasks = tasks.filter((t) => t.blockId === b.id);
-              const showEst =
-                b.estimateAccuracy === undefined &&
-                isElapsed(b.date, b.endMinutes);
-              const minH =
-                64 + blockTasks.length * 24 + 48 + (showEst ? 34 : 0);
-              const height = Math.max(
-                minH,
-                ((endM - startM) / 60) * HOUR_H - 4
-              );
+              // §16: height is strictly time-based — NEVER estimated from task/
+              // content count, or content bleeds into the block below. Content
+              // scrolls inside the block instead. Small constant floor only.
+              const height = Math.max(24, ((endM - startM) / 60) * HOUR_H - 4);
               const selected = selectedId === b.id;
               return (
                 <div
@@ -147,47 +174,49 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                       : "Click to select"
                   }
                 >
-                  <div className="dt-head">
-                    <span
-                      className="dt-tag"
-                      style={{ background: cat.color + "33", color: cat.color }}
-                    >
-                      {cat.name.toUpperCase()}
-                    </span>
-                    <span className="dt-title">{b.title || cat.name}</span>
-                    <span className="dt-time">{fmtTime(startM)}</span>
-                    <button
-                      className="dt-del"
-                      aria-label="Delete block"
-                      onClick={() => {
-                        if (selectedId === b.id) setSelectedId(null);
-                        removeBlock(b);
-                      }}
-                    >
-                      <XSmall />
-                    </button>
-                  </div>
-                  <div className="dt-tasks">
-                    {blockTasks.map((t) => (
-                      <div key={t.id} className={`dt-task ${t.done ? "done" : ""}`}>
-                        <input
-                          type="checkbox"
-                          checked={t.done}
-                          onChange={() => toggleTask(t.id)}
-                          id={`dt-${t.id}`}
-                        />
-                        <label htmlFor={`dt-${t.id}`}>{t.title}</label>
-                      </div>
-                    ))}
-                  </div>
-                  <textarea
-                    className="dt-notes"
-                    placeholder="Notes…"
-                    value={b.notes ?? ""}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
-                  />
-                  <EstimatePrompt block={b} />
+                  <BlockScroll>
+                    <div className="dt-head">
+                      <span
+                        className="dt-tag"
+                        style={{ background: cat.color + "33", color: cat.color }}
+                      >
+                        {cat.name.toUpperCase()}
+                      </span>
+                      <span className="dt-title">{b.title || cat.name}</span>
+                      <span className="dt-time">{fmtTime(startM)}</span>
+                      <button
+                        className="dt-del"
+                        aria-label="Delete block"
+                        onClick={() => {
+                          if (selectedId === b.id) setSelectedId(null);
+                          removeBlock(b);
+                        }}
+                      >
+                        <XSmall />
+                      </button>
+                    </div>
+                    <div className="dt-tasks">
+                      {blockTasks.map((t) => (
+                        <div key={t.id} className={`dt-task ${t.done ? "done" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={t.done}
+                            onChange={() => toggleTask(t.id)}
+                            id={`dt-${t.id}`}
+                          />
+                          <label htmlFor={`dt-${t.id}`}>{t.title}</label>
+                        </div>
+                      ))}
+                    </div>
+                    <textarea
+                      className="dt-notes"
+                      placeholder="Notes…"
+                      value={b.notes ?? ""}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
+                    />
+                    <EstimatePrompt block={b} />
+                  </BlockScroll>
                   {selected && (
                     <>
                       <div

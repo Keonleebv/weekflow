@@ -173,7 +173,13 @@ input{font-family:inherit;}
 .dt-now-line::before{content:"";position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:#f2555a;}
 .dt-block{
   position:absolute;left:10px;right:10px;border-radius:12px;border:1px solid;
-  padding:10px 14px;overflow:hidden;cursor:grab;touch-action:none;
+  overflow:hidden;cursor:grab;touch-action:none;
+}
+/* §16: content scrolls inside the time-sized block; padding lives here now */
+.dt-scroll{height:100%;overflow-y:auto;padding:10px 14px;box-sizing:border-box;}
+.dt-fade{
+  position:absolute;left:0;right:0;bottom:0;height:20px;pointer-events:none;z-index:5;
+  border-radius:0 0 11px 11px;background:linear-gradient(180deg,transparent,rgba(12,14,18,.92));
 }
 .dt-block .dt-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
 .dt-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:5px;}
