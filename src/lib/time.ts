@@ -91,6 +91,20 @@ export function minutesFromOffset(offsetPx: number): number {
   return Math.max(GRID_START_H * 60, Math.min(GRID_END_H * 60, snapped));
 }
 
+/** Current local time as minutes from midnight. */
+export function nowMinutes(): number {
+  const n = new Date();
+  return n.getHours() * 60 + n.getMinutes();
+}
+
+/** True once a block's end time has passed (a past day, or today past its end). */
+export function isElapsed(dateISO: string, endMinutes: number): boolean {
+  const today = todayISO();
+  if (dateISO < today) return true;
+  if (dateISO === today) return endMinutes <= nowMinutes();
+  return false;
+}
+
 /** Now-line offset for an ISO date, or null if it isn't today / off-grid. */
 export function nowOffset(dateISO: string): number | null {
   if (dateISO !== todayISO()) return null;

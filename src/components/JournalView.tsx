@@ -2,9 +2,10 @@ import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { track } from "@vercel/analytics";
 import { useStore } from "../store";
-import { fmtTime, fullDayNameISO, parseISO, addDaysISO } from "../lib/time";
+import { fmtTime, fullDayNameISO, parseISO, addDaysISO, isElapsed } from "../lib/time";
 import type { JournalEntry, Mood } from "../types";
 import { SummaryCard } from "./SummaryCard";
+import { EstimatePrompt } from "./EstimatePrompt";
 
 function hasContent(e?: JournalEntry): boolean {
   if (!e) return false;
@@ -148,6 +149,12 @@ export function JournalView() {
                         />
                       </div>
                     )}
+                    {b.estimateAccuracy === undefined &&
+                      isElapsed(b.date, b.endMinutes) && (
+                        <div style={{ padding: "0 14px 12px" }}>
+                          <EstimatePrompt block={b} />
+                        </div>
+                      )}
                   </div>
                 );
               })

@@ -53,6 +53,35 @@ export function WeeklyReviewModal({ open, onClose }: Props) {
   const weekTasks = tasks.filter((t) => weekSet.has(t.date));
   const doneCount = weekTasks.filter((t) => t.done).length;
 
+  // estimate-accuracy patterns — only surfaced once a category has ≥3 tagged
+  // blocks this week, so we never overclaim a pattern from one data point.
+  const estInsights = categories
+    .map((c) => {
+      const tagged = blocks.filter(
+        (b) =>
+          !b.skipped &&
+          b.categoryId === c.id &&
+          weekSet.has(b.date) &&
+          (b.estimateAccuracy === "over" ||
+            b.estimateAccuracy === "under" ||
+            b.estimateAccuracy === "accurate")
+      );
+      if (tagged.length < 3) return null;
+      const counts = { over: 0, under: 0, accurate: 0 };
+      tagged.forEach((b) => (counts[b.estimateAccuracy as keyof typeof counts]++));
+      const top = (Object.keys(counts) as (keyof typeof counts)[]).sort(
+        (a, b) => counts[b] - counts[a]
+      )[0];
+      const msg =
+        top === "over"
+          ? "tends to run long"
+          : top === "under"
+            ? "tends to finish early"
+            : "estimates are on point";
+      return { cat: c, msg };
+    })
+    .filter((x): x is { cat: (typeof categories)[number]; msg: string } => !!x);
+
   // AI digest — reuse /api/summarize fed this week's journal text
   const combined = weekDates
     .map((d) => journalEntries[d])
@@ -177,6 +206,20 @@ export function WeeklyReviewModal({ open, onClose }: Props) {
             />
           </div>
         </div>
+
+        {estInsights.length > 0 && (
+          <div className="review-section">
+            <p className="mr-label">Estimation</p>
+            {estInsights.map(({ cat, msg }) => (
+              <div className="est-insight" key={cat.id}>
+                <span className="dot" style={{ background: cat.color }} />
+                <span>
+                  <strong>{cat.name}</strong> {msg}.
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {combined && (
           <div className="summary-card" style={{ marginTop: 4 }}>

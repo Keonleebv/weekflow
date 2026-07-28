@@ -10,11 +10,13 @@ import {
   offsetForMinutes,
   nowOffset,
   scrollToNowTop,
+  isElapsed,
 } from "../lib/time";
 import { useDragCreate, type Range } from "../lib/useDragCreate";
 import { useBlockDrag } from "../lib/useBlockDrag";
 import type { Block, Category } from "../types";
 import { XSmall } from "./icons";
+import { EstimatePrompt } from "./EstimatePrompt";
 
 function blockStyle(cat: Category): React.CSSProperties {
   return {
@@ -119,7 +121,11 @@ export function DayView({ onCreateRange, onEdit }: Props) {
               const endM = isDragging ? drag.live!.end : b.endMinutes;
               const top = offsetForMinutes(startM);
               const blockTasks = tasks.filter((t) => t.blockId === b.id);
-              const minH = 64 + blockTasks.length * 24 + 48;
+              const showEst =
+                b.estimateAccuracy === undefined &&
+                isElapsed(b.date, b.endMinutes);
+              const minH =
+                64 + blockTasks.length * 24 + 48 + (showEst ? 34 : 0);
               const height = Math.max(
                 minH,
                 ((endM - startM) / 60) * HOUR_H - 4
@@ -181,6 +187,7 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                     onPointerDown={(e) => e.stopPropagation()}
                     onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
                   />
+                  <EstimatePrompt block={b} />
                   {selected && (
                     <>
                       <div

@@ -437,6 +437,30 @@ select,.text-input{
 .summary-bullets li::marker{color:var(--accent);}
 .summary-empty{font-size:12px;color:var(--text-faint);}
 
+/* ---------- week-over-week allocation delta ---------- */
+.legend-delta{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0;}
+.legend-delta.up{color:#34d399;}
+.legend-delta.down{color:#f2a93b;}
+
+/* ---------- estimate-accuracy prompt ---------- */
+.est-prompt{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--border-soft);
+}
+.est-q{font-size:10.5px;color:var(--text-faint);margin-right:2px;}
+.est-btn{
+  background:rgba(0,0,0,.18);border:1px solid var(--border-soft);color:var(--text-dim);
+  border-radius:6px;padding:3px 8px;font-size:10.5px;cursor:pointer;line-height:1.3;
+}
+.est-btn:hover{color:var(--text);border-color:var(--accent);}
+.est-dismiss{background:transparent;border:none;color:var(--text-faint);cursor:pointer;padding:2px 4px;font-size:12px;margin-left:auto;line-height:1;}
+.est-dismiss:hover{color:var(--text-dim);}
+.est-badge{font-size:9.5px;font-weight:600;color:var(--text-faint);margin-left:6px;}
+
+/* estimate insight rows in the weekly review */
+.est-insight{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-dim);padding:5px 0;}
+.est-insight .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
 /* ---------- edit-note (driving instance of a repeating block) ---------- */
 .edit-note{
   display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--text-dim);

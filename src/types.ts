@@ -18,6 +18,8 @@ export type Block = {
   seriesId?: string; // ties every instance of a recurring series together
   skipped?: boolean; // "delete just this occurrence" tombstone
   notes?: string; // day-view per-block notes
+  // one-tap estimate-accuracy tag: undefined = never asked, null = dismissed
+  estimateAccuracy?: "accurate" | "over" | "under" | null;
 };
 
 export type Task = {

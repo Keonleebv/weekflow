@@ -1,7 +1,15 @@
 import { PieChart, Pie, Cell } from "recharts";
 import { useStore } from "../store";
-import { DAYS, datesOfWeek, dayIndexOfISO, fullDayNameISO } from "../lib/time";
+import {
+  DAYS,
+  datesOfWeek,
+  dayIndexOfISO,
+  fullDayNameISO,
+  addDaysISO,
+} from "../lib/time";
 import { catHoursForDates } from "../lib/stats";
+
+const fmtHrs = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
 
 type Props = {
   onOpenReview: () => void;
@@ -21,10 +29,17 @@ export function OverviewCard({ onOpenReview }: Props) {
   const scopedDate =
     mode === "journal" || view === "day" ? selectedDate : null;
   const weekDates = datesOfWeek(currentWeekStart);
+  const prevWeekDates = datesOfWeek(addDaysISO(currentWeekStart, -7));
   const scopeDates = scopedDate ? [scopedDate] : weekDates;
 
   const catHours = (catId: string) =>
     catHoursForDates(blocks, catId, scopeDates);
+  // week-over-week delta vs the same category exactly 7 days prior
+  const catDelta = (catId: string): number | null => {
+    const prev = catHoursForDates(blocks, catId, prevWeekDates);
+    if (prev <= 0) return null; // no prior-week data → no misleading delta
+    return catHoursForDates(blocks, catId, weekDates) - prev;
+  };
 
   const totals = categories
     .map((c) => ({ cat: c, hrs: catHours(c.id) }))
@@ -110,11 +125,21 @@ export function OverviewCard({ onOpenReview }: Props) {
             const hrs = catHours(c.id);
             const goal = c.weeklyGoalHours || 0;
             const pct = goal ? Math.min(100, Math.round((hrs / goal) * 100)) : 0;
+            const delta = catDelta(c.id);
+            const showDelta = delta !== null && Math.round(delta * 10) !== 0;
             return (
               <div className="legend-item" key={c.id}>
                 <div className="legend-top">
                   <span className="dot" style={{ background: c.color }} />
                   <span className="legend-name">{c.name}</span>
+                  {showDelta && (
+                    <span
+                      className={`legend-delta ${delta! > 0 ? "up" : "down"}`}
+                      title="vs. last week"
+                    >
+                      {delta! > 0 ? "▲" : "▼"} {fmtHrs(Math.abs(delta!))}h
+                    </span>
+                  )}
                   <span className="legend-hrs">
                     {hrs % 1 === 0 ? hrs : hrs.toFixed(1)}h{goal ? ` / ${goal}h` : ""}
                   </span>

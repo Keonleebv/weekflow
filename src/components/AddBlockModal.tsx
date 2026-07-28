@@ -45,6 +45,16 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
   const [askDelete, setAskDelete] = useState(false);
   const [error, setError] = useState("");
 
+  // Smart default: a category's most recently created block's times, so a new
+  // block starts where you usually put that category (14c). Null if none yet.
+  const catDefaultTimes = (catId: string) => {
+    const cb = useStore
+      .getState()
+      .blocks.filter((b) => !b.skipped && b.categoryId === catId);
+    const last = cb[cb.length - 1];
+    return last ? { start: last.startMinutes, end: last.endMinutes } : null;
+  };
+
   useEffect(() => {
     if (!open) return;
     if (editing) {
@@ -56,17 +66,35 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
       setNotes(editing.notes ?? "");
       setRecurrence(editing.recurrence);
     } else {
-      setCatId(categories[0]?.id ?? "");
+      const cat = categories[0]?.id ?? "";
+      setCatId(cat);
       setDate(prefill ? prefill.date : selectedDate);
-      setStart(prefill ? prefill.start : 9 * 60);
-      setEnd(prefill ? prefill.end : 11 * 60);
+      if (prefill) {
+        setStart(prefill.start);
+        setEnd(prefill.end);
+      } else {
+        const d = catDefaultTimes(cat);
+        setStart(d?.start ?? 9 * 60);
+        setEnd(d?.end ?? 11 * 60);
+      }
       setTitle("");
       setNotes("");
       setRecurrence(null);
     }
     setAskDelete(false);
     setError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, prefill, selectedDate, categories]);
+
+  // picking a category on a NEW block pulls that category's usual time
+  const pickCategory = (id: string) => {
+    setCatId(id);
+    if (!editing) {
+      const d = catDefaultTimes(id);
+      setStart(d?.start ?? 9 * 60);
+      setEnd(d?.end ?? 11 * 60);
+    }
+  };
 
   if (!open) return null;
 
@@ -149,7 +177,7 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
                 key={c.id}
                 type="button"
                 className={`chip ${c.id === catId ? "sel" : ""}`}
-                onClick={() => setCatId(c.id)}
+                onClick={() => pickCategory(c.id)}
               >
                 <span className="dot" style={{ background: c.color }} />
                 {c.name}
