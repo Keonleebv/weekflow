@@ -123,6 +123,10 @@ function unsubscribeRealtime() {
   }
 }
 
+// Which account the data currently in localStorage belongs to. Absent = the
+// user has never logged in on this device (genuine anonymous local data).
+const OWNER_KEY = "weekflow-owner";
+
 async function onLogin(userId: string) {
   if (!supabase || currentUserId === userId) return;
   currentUserId = userId;
@@ -135,19 +139,31 @@ async function onLogin(userId: string) {
     console.error("weekflow sync load failed:", error.message);
     return;
   }
-  if (!data) {
-    await pushNow(); // first-ever login → seed the cloud from local data
-  } else {
-    // Most-recently-edited wins: keep local if this device edited it later than
-    // the cloud copy, otherwise adopt the (newer) cloud copy.
+
+  // Is the local data actually this account's? It only is when the persisted
+  // owner matches (e.g. a reload of an already-signed-in session). After a
+  // logout we clear the owner, so a different account never treats the previous
+  // account's leftover data as its own — the root of the cross-account leak.
+  const owner = localStorage.getItem(OWNER_KEY);
+  const localIsThisAccount = owner === userId;
+
+  if (data) {
     const remoteMs = Date.parse((data.updated_at as string) ?? "") || 0;
-    const localMs = getLocalEditedAt();
-    if (localMs > remoteMs) {
-      await pushNow(); // local is newer → push it up as the shared truth
+    if (localIsThisAccount && getLocalEditedAt() > remoteMs) {
+      await pushNow(); // same account, local edited more recently → keep local
     } else {
-      applyRemote(data.data as SyncData, remoteMs); // cloud is newer → adopt it
+      applyRemote(data.data as SyncData, remoteMs); // adopt the cloud copy
     }
+  } else if (owner == null) {
+    await pushNow(); // genuine first-ever login → seed cloud from local data
+  } else {
+    // A different account with no cloud row yet — start clean, never push the
+    // previous account's data into it.
+    useStore.getState().resetForLogout();
+    await pushNow();
   }
+
+  localStorage.setItem(OWNER_KEY, userId);
   subscribeRealtime(userId);
 }
 
@@ -155,7 +171,10 @@ function onLogout() {
   currentUserId = null;
   window.clearTimeout(pushTimer);
   unsubscribeRealtime();
-  // Local data stays in localStorage so the logged-out app still works.
+  // Wipe this account's data locally so the next account starts clean.
+  localStorage.removeItem(OWNER_KEY);
+  localStorage.removeItem(EDIT_KEY);
+  useStore.getState().resetForLogout();
 }
 
 let started = false;

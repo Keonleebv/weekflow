@@ -16,12 +16,34 @@ const currentWeek = () => useStore.getState().currentWeekStart;
 const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 const CLIENT_ID_STORAGE_KEY = "weekflow-gcal-client-id";
 const AUTO_KEY = "weekflow-gcal-auto"; // "1" once connected; enables silent reconnect
+// Short-lived Google access token kept in sessionStorage (tab-scoped, cleared
+// when the tab closes) so a refresh reconnects deterministically — unlike the
+// silent GIS re-auth, which browsers block under strict third-party-cookie
+// rules. Never localStorage: it must not survive the browser session at rest.
+const TOKEN_KEY = "weekflow-gcal-token";
 const ENV_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const google: any;
 
 let accessToken: string | null = null;
+
+function setToken(token: string) {
+  accessToken = token;
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* sessionStorage unavailable — fall back to memory only */
+  }
+}
+function clearToken() {
+  accessToken = null;
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Run cb once the GIS script has loaded (it's async in index.html). */
 function whenGoogleReady(cb: () => void, onFail?: () => void, tries = 0) {
@@ -149,7 +171,7 @@ export const useGCal = create<GCalState>((set, get) => ({
               set({ error: "Sign-in was cancelled or denied." });
               return;
             }
-            accessToken = resp.access_token;
+            setToken(resp.access_token);
             localStorage.setItem(AUTO_KEY, "1");
             set({ connected: true, error: "" });
             track("gcal_connected");
@@ -163,11 +185,26 @@ export const useGCal = create<GCalState>((set, get) => ({
     );
   },
 
-  // Silent reconnect on load — no popup. Only attempts if a prior connection
-  // was recorded and Google still has a live grant + session for this client.
+  // Reconnect on load. First reuse a still-valid token from this tab's
+  // sessionStorage (survives refresh reliably). If none, fall back to a silent,
+  // no-popup GIS re-auth — best-effort, since browsers may block it.
   tryAutoConnect: () => {
     const { clientId } = get();
-    if (!clientId || accessToken) return;
+    if (accessToken) return;
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (stored) {
+      accessToken = stored;
+      set({ connected: true, error: "" });
+      get().refreshSidebar(); // a 401 here (expired) clears back to disconnected
+      get().refreshGrid(currentWeek());
+      return;
+    }
+    if (!clientId) return;
     if (localStorage.getItem(AUTO_KEY) !== "1") return;
     whenGoogleReady(() => {
       const tc = google.accounts.oauth2.initTokenClient({
@@ -176,7 +213,7 @@ export const useGCal = create<GCalState>((set, get) => ({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         callback: (resp: any) => {
           if (resp.error) return; // stay disconnected quietly
-          accessToken = resp.access_token;
+          setToken(resp.access_token);
           set({ connected: true, error: "" });
           get().refreshSidebar();
           get().refreshGrid(currentWeek());
@@ -191,7 +228,7 @@ export const useGCal = create<GCalState>((set, get) => ({
     if (accessToken && typeof google !== "undefined" && google.accounts?.oauth2) {
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
-    accessToken = null;
+    clearToken();
     localStorage.removeItem(AUTO_KEY); // don't silently reconnect after an explicit disconnect
     set({ connected: false, sidebarEvents: null, gridEvents: [], error: "" });
   },
@@ -201,7 +238,7 @@ export const useGCal = create<GCalState>((set, get) => ({
   // without a second OAuth popup. Short-lived and not refreshed by Supabase —
   // once it expires, the Connect button re-establishes it via GIS.
   adoptToken: (token, weekStart) => {
-    accessToken = token;
+    setToken(token);
     localStorage.setItem(AUTO_KEY, "1"); // enable silent GIS reconnect after reload
     set({ connected: true, error: "" });
     get().refreshSidebar();
@@ -244,7 +281,7 @@ function handleFetchError(
 ) {
   const err = e as { status?: number; message?: string };
   if (err.status === 401 || err.status === 403) {
-    accessToken = null;
+    clearToken();
     set({
       connected: false,
       error: "Google Calendar session expired — reconnect to refresh.",

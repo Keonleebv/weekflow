@@ -78,6 +78,7 @@ type Actions = {
 
   toggleSidebar: () => void;
   completeOnboarding: () => void;
+  resetForLogout: () => void;
   setJournalMood: (date: string, mood: Mood) => void;
   setJournalOverall: (date: string, text: string) => void;
   setJournalBlockNote: (date: string, blockId: string, text: string) => void;
@@ -316,6 +317,20 @@ export const useStore = create<State & Actions>()(
 
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       completeOnboarding: () => set({ onboarded: true }),
+
+      // Clear this account's synced content on sign-out so the next account
+      // starts clean (no data leaking between accounts). Keeps onboarded true
+      // and the current view/date so the app doesn't jar back to onboarding.
+      resetForLogout: () => {
+        const blank = blankState();
+        set({
+          categories: blank.categories,
+          blocks: [],
+          tasks: [],
+          journalEntries: {},
+          weeklyDigests: {},
+        });
+      },
       setJournalMood: (date, mood) =>
         set((s) => {
           const entry = s.journalEntries[date] ?? blankEntry(date);
