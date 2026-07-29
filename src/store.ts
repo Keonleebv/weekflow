@@ -230,7 +230,11 @@ export const useStore = create<State & Actions>()(
       deleteBlock: (id) =>
         set((s) => ({
           blocks: s.blocks.filter((b) => b.id !== id),
-          tasks: s.tasks.filter((t) => t.blockId !== id),
+          // keep the tasks — they're date-based (§13b) and should still carry
+          // over; just unlink them from the deleted block.
+          tasks: s.tasks.map((t) =>
+            t.blockId === id ? { ...t, blockId: undefined } : t
+          ),
         })),
       skipOccurrence: (id) =>
         set((s) => ({
@@ -238,7 +242,9 @@ export const useStore = create<State & Actions>()(
           blocks: s.blocks.map((b) =>
             b.id === id ? { ...b, skipped: true } : b
           ),
-          tasks: s.tasks.filter((t) => t.blockId !== id),
+          tasks: s.tasks.map((t) =>
+            t.blockId === id ? { ...t, blockId: undefined } : t
+          ),
         })),
       stopRepeating: (id) =>
         set((s) => {
