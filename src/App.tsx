@@ -12,6 +12,7 @@ import { GCalCard } from "./components/GCalCard";
 import { AddBlockModal } from "./components/AddBlockModal";
 import { AllocationModal } from "./components/AllocationModal";
 import { WeeklyReviewModal } from "./components/WeeklyReviewModal";
+import { AuthModal } from "./components/AuthModal";
 import { Onboarding } from "./components/Onboarding";
 import type { Block } from "./types";
 
@@ -28,6 +29,7 @@ function App() {
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [allocOpen, setAllocOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false); // mobile sidebar sheet
   const [toast, setToast] = useState("");
@@ -97,7 +99,10 @@ function App() {
 
   return (
     <div className={shellClass}>
-      <Rail onOpenAllocation={() => setAllocOpen(true)} />
+      <Rail
+        onOpenAllocation={() => setAllocOpen(true)}
+        onOpenAccount={() => setAccountOpen(true)}
+      />
 
       <div className="content-col">
         <TopBar onAddBlock={() => openAdd()} />
@@ -136,6 +141,7 @@ function App() {
         onSaved={(msg) => showToast(msg)}
       />
       <AllocationModal open={allocOpen} onClose={() => setAllocOpen(false)} />
+      <AuthModal open={accountOpen} onClose={() => setAccountOpen(false)} />
       <WeeklyReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} />
 
       {toast && <div className="toast">{toast}</div>}

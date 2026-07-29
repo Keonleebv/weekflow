@@ -1,13 +1,17 @@
 import { useStore } from "../store";
-import { CalendarIcon, SlidersIcon, BookIcon } from "./icons";
+import { CalendarIcon, SlidersIcon, BookIcon, UserIcon } from "./icons";
+import { useAuth } from "../lib/sync";
 
 type Props = {
   onOpenAllocation: () => void;
+  onOpenAccount: () => void;
 };
 
-export function Rail({ onOpenAllocation }: Props) {
+export function Rail({ onOpenAllocation, onOpenAccount }: Props) {
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);
+  const { user, enabled } = useAuth();
+  const initial = (user?.email || "?").trim().charAt(0).toUpperCase();
 
   return (
     <div className="rail">
@@ -39,6 +43,16 @@ export function Rail({ onOpenAllocation }: Props) {
         >
           <SlidersIcon />
         </button>
+        {enabled && (
+          <button
+            className="rail-btn account-btn"
+            title={user ? user.email || "Account" : "Sign in to sync"}
+            aria-label={user ? "Account" : "Sign in to sync"}
+            onClick={onOpenAccount}
+          >
+            {user ? <span className="account-initial">{initial}</span> : <UserIcon />}
+          </button>
+        )}
       </div>
     </div>
   );
