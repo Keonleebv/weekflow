@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CloseIcon } from "./icons";
 import {
   useAuth,
@@ -21,6 +21,16 @@ export function AuthModal({ open, onClose }: Props) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Returning users sign in far more than sign up — always open on the Sign-in
+  // tab with a clean slate, rather than remembering the last tab used.
+  useEffect(() => {
+    if (open) {
+      setTab("in");
+      setError("");
+      setNotice("");
+    }
+  }, [open]);
 
   if (!open) return null;
 
