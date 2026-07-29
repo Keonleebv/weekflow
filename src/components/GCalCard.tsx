@@ -235,9 +235,11 @@ export function GCalCard() {
         <div className="gcal-status">
           <span className={connected ? "dot-live" : "dot-off"} />
           {connected ? "Synced with Google Calendar" : "Not connected"}
-          <span className="gcal-edit-link" onClick={changeClientId}>
-            change client ID
-          </span>
+          {!ENV_CLIENT_ID && (
+            <span className="gcal-edit-link" onClick={changeClientId}>
+              change client ID
+            </span>
+          )}
         </div>
       )}
 
