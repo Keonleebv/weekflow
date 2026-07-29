@@ -74,6 +74,7 @@ function App() {
       if (e.key === "Escape") {
         closeBlock();
         setAllocOpen(false);
+        setAccountOpen(false);
         return;
       }
       if (e.key === "c" && mode === "planner" && !blockOpen && !allocOpen) {

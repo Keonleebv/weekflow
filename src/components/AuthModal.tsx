@@ -33,20 +33,19 @@ export function AuthModal({ open, onClose }: Props) {
       return;
     }
     setBusy(true);
-    const res =
-      tab === "in"
-        ? await signInWithEmail(email.trim(), password)
-        : await signUpWithEmail(email.trim(), password);
-    setBusy(false);
-    if (res.error) {
-      setError(res.error);
-    } else if (tab === "up") {
-      setNotice(
-        "Account created. If email confirmation is on, check your inbox to verify, then sign in."
-      );
-    } else {
-      onClose();
+    if (tab === "up") {
+      const res = await signUpWithEmail(email.trim(), password);
+      setBusy(false);
+      if (res.error) setError(res.error);
+      else if (res.needsConfirmation)
+        setNotice("Account created — check your inbox to confirm, then sign in.");
+      else onClose(); // signed in immediately (confirmation off)
+      return;
     }
+    const res = await signInWithEmail(email.trim(), password);
+    setBusy(false);
+    if (res.error) setError(res.error);
+    else onClose();
   };
 
   const google = async () => {

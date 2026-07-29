@@ -173,10 +173,16 @@ export async function signInWithEmail(
 export async function signUpWithEmail(
   email: string,
   password: string
-): Promise<AuthResult> {
-  if (!supabase) return { error: "Cloud sync is not configured." };
-  const { error } = await supabase.auth.signUp({ email, password });
-  return { error: error?.message ?? null };
+): Promise<AuthResult & { needsConfirmation: boolean }> {
+  if (!supabase)
+    return { error: "Cloud sync is not configured.", needsConfirmation: false };
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  // If a session came back, the user is already signed in (email confirmation
+  // is off). Otherwise they must confirm via email before signing in.
+  return {
+    error: error?.message ?? null,
+    needsConfirmation: !error && !data.session,
+  };
 }
 
 export async function signOut(): Promise<void> {
