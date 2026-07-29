@@ -63,6 +63,7 @@ type GCalState = {
   resetClientId: () => void;
   connect: (weekStart: string) => void;
   disconnect: () => void;
+  adoptToken: (token: string, weekStart: string) => void;
   refreshSidebar: () => Promise<void>;
   refreshGrid: (weekStart: string) => Promise<void>;
 };
@@ -151,11 +152,22 @@ export const useGCal = create<GCalState>((set, get) => ({
   },
 
   disconnect: () => {
-    if (accessToken && typeof google !== "undefined") {
+    if (accessToken && typeof google !== "undefined" && google.accounts?.oauth2) {
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
     accessToken = null;
     set({ connected: false, sidebarEvents: null, gridEvents: [], error: "" });
+  },
+
+  // Reuse the Google access token handed back by Supabase's "Sign in with
+  // Google" (session.provider_token) so the calendar connects in one step,
+  // without a second OAuth popup. Short-lived and not refreshed by Supabase —
+  // once it expires, the Connect button re-establishes it via GIS.
+  adoptToken: (token, weekStart) => {
+    accessToken = token;
+    set({ connected: true, error: "" });
+    get().refreshSidebar();
+    get().refreshGrid(weekStart);
   },
 }));
 

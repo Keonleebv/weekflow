@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { RealtimeChannel, Session } from "@supabase/supabase-js";
 import { supabase, supabaseEnabled, STATE_TABLE } from "./supabase";
 import { useStore } from "../store";
+import { useGCal } from "./gcal";
 
 // User CONTENT is synced across devices. View/navigation state (which day/week
 // is on screen) stays device-local so two open screens don't fight the cursor.
@@ -176,8 +177,21 @@ export function initSync() {
 
   // Emits INITIAL_SESSION on load (restored session) then SIGNED_IN/SIGNED_OUT.
   supabase.auth.onAuthStateChange((_event, session) => {
-    if (session?.user) onLogin(session.user.id);
-    else onLogout();
+    if (session?.user) {
+      onLogin(session.user.id);
+      // If they signed in with Google (calendar scope granted), the session
+      // carries a Google access token — connect the calendar in one step.
+      // provider_token is only present right after the OAuth redirect, not on
+      // a restored session, so a reload falls back to the Connect button.
+      if (session.provider_token) {
+        useGCal
+          .getState()
+          .adoptToken(session.provider_token, useStore.getState().currentWeekStart);
+      }
+    } else {
+      onLogout();
+      useGCal.getState().disconnect();
+    }
   });
 }
 
@@ -188,7 +202,13 @@ export async function signInWithGoogle(): Promise<AuthResult> {
   if (!supabase) return { error: "Cloud sync is not configured." };
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.origin },
+    options: {
+      redirectTo: window.location.origin,
+      // Also request read-only calendar so the timeline auto-connects — one
+      // handshake instead of a second popup.
+      scopes: "https://www.googleapis.com/auth/calendar.readonly",
+      queryParams: { access_type: "offline", include_granted_scopes: "true" },
+    },
   });
   return { error: error?.message ?? null };
 }

@@ -323,6 +323,7 @@ input{font-family:inherit;}
 }
 .auth-modal{width:400px;}
 .auth-hint{font-size:12.5px;color:var(--text-faint);line-height:1.5;margin:0 0 16px;}
+.auth-subnote{font-size:11px;color:var(--text-faint);text-align:center;margin:7px 0 0;}
 .auth-signed-in .auth-email{font-size:14px;font-weight:600;margin:0 0 6px;}
 .google-btn{
   width:100%;display:flex;align-items:center;justify-content:center;gap:10px;

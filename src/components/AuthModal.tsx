@@ -110,6 +110,7 @@ export function AuthModal({ open, onClose }: Props) {
               <GoogleG />
               Continue with Google
             </button>
+            <p className="auth-subnote">Also connects your Google Calendar (read-only).</p>
 
             <div className="auth-divider">
               <span>or</span>
