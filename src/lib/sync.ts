@@ -33,7 +33,18 @@ function extract(): SyncData {
 // doesn't immediately push it straight back up (echo loop guard).
 let applyingRemote = false;
 
-function applyRemote(data: Partial<SyncData>) {
+// Wall-clock time of this device's last local content edit, persisted so it
+// survives reloads. Compared against the cloud row's updated_at to decide, on
+// login, which copy is more recent ("most-recently-edited wins").
+const EDIT_KEY = "weekflow-edited-at";
+function getLocalEditedAt(): number {
+  return Number(localStorage.getItem(EDIT_KEY)) || 0;
+}
+function setLocalEditedAt(ms: number) {
+  localStorage.setItem(EDIT_KEY, String(ms));
+}
+
+function applyRemote(data: Partial<SyncData>, remoteEditedAtMs: number) {
   applyingRemote = true;
   useStore.setState({
     categories: data.categories ?? [],
@@ -44,6 +55,8 @@ function applyRemote(data: Partial<SyncData>) {
     onboarded: data.onboarded ?? true,
   });
   applyingRemote = false;
+  // This device now holds the remote copy, timestamped as the remote was.
+  setLocalEditedAt(remoteEditedAtMs);
 }
 
 let currentUserId: string | null = null;
@@ -57,18 +70,22 @@ function schedulePush() {
 
 async function pushNow() {
   if (!supabase || !currentUserId) return;
+  // Stamp the cloud row with the actual local edit time (not the push time), so
+  // "most recent edit" comparisons across devices stay accurate.
+  const editedAt = getLocalEditedAt() || Date.now();
+  setLocalEditedAt(editedAt);
   const { error } = await supabase.from(STATE_TABLE).upsert({
     user_id: currentUserId,
     data: extract(),
-    updated_at: new Date().toISOString(),
+    updated_at: new Date(editedAt).toISOString(),
   });
   if (error) console.error("weekflow sync push failed:", error.message);
 }
 
 // Ignore realtime events that just echo our own write (same content).
-function realtimeApply(incoming: SyncData) {
+function realtimeApply(incoming: SyncData, remoteEditedAtMs: number) {
   if (JSON.stringify(incoming) === JSON.stringify(extract())) return;
-  applyRemote(incoming);
+  applyRemote(incoming, remoteEditedAtMs);
 }
 
 let channel: RealtimeChannel | null = null;
@@ -87,8 +104,12 @@ function subscribeRealtime(userId: string) {
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const row = payload.new as { data?: SyncData } | null;
-        if (row?.data) realtimeApply(row.data);
+        const row = payload.new as {
+          data?: SyncData;
+          updated_at?: string;
+        } | null;
+        if (row?.data)
+          realtimeApply(row.data, Date.parse(row.updated_at ?? "") || Date.now());
       }
     )
     .subscribe();
@@ -106,17 +127,25 @@ async function onLogin(userId: string) {
   currentUserId = userId;
   const { data, error } = await supabase
     .from(STATE_TABLE)
-    .select("data")
+    .select("data, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) {
     console.error("weekflow sync load failed:", error.message);
     return;
   }
-  if (data?.data) {
-    applyRemote(data.data as SyncData); // cloud is the shared truth
-  } else {
+  if (!data) {
     await pushNow(); // first-ever login → seed the cloud from local data
+  } else {
+    // Most-recently-edited wins: keep local if this device edited it later than
+    // the cloud copy, otherwise adopt the (newer) cloud copy.
+    const remoteMs = Date.parse((data.updated_at as string) ?? "") || 0;
+    const localMs = getLocalEditedAt();
+    if (localMs > remoteMs) {
+      await pushNow(); // local is newer → push it up as the shared truth
+    } else {
+      applyRemote(data.data as SyncData, remoteMs); // cloud is newer → adopt it
+    }
   }
   subscribeRealtime(userId);
 }
@@ -139,7 +168,10 @@ export function initSync() {
   useStore.subscribe((state, prev) => {
     if (applyingRemote) return;
     const changed = SYNC_KEYS.some((k) => state[k] !== prev[k]);
-    if (changed) schedulePush();
+    if (changed) {
+      setLocalEditedAt(Date.now()); // this device just edited
+      schedulePush();
+    }
   });
 
   // Emits INITIAL_SESSION on load (restored session) then SIGNED_IN/SIGNED_OUT.
