@@ -49,6 +49,8 @@ export function GCalCard() {
   const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState<GCalEvent[] | null>(null);
   const [error, setError] = useState("");
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
 
   const saveClientId = () => {
     const val = clientIdInput.trim();
@@ -149,18 +151,36 @@ export function GCalCard() {
       {!clientId && (
         <div className="gcal-setup">
           <p>
-            Paste a Google OAuth Client ID to pull real invites in (read-only). Create
-            one free in{" "}
+            Pull real invites in (read-only). One-time setup in{" "}
             <a
               href="https://console.cloud.google.com/apis/credentials"
               target="_blank"
               rel="noopener noreferrer"
             >
               Google Cloud Console
-            </a>{" "}
-            — OAuth client, type "Web application", with this page's origin added under
-            Authorized JavaScript origins.
+            </a>
+            :
           </p>
+          <ol className="gcal-steps">
+            <li>Pick or create a project (top-left).</li>
+            <li>
+              Enable the <b>Google Calendar API</b> (APIs &amp; Services → Enable
+              APIs).
+            </li>
+            <li>
+              <b>OAuth consent screen</b> → External → add your email under Test
+              users.
+            </li>
+            <li>
+              <b>Credentials → Create credentials → OAuth client ID</b> → type{" "}
+              <b>Web application</b>.
+            </li>
+            <li>
+              Under <b>Authorized JavaScript origins</b> add{" "}
+              <code>{origin}</code>, then Create.
+            </li>
+            <li>Paste the Client ID below.</li>
+          </ol>
           <div className="gcal-setup-row">
             <input
               type="text"
