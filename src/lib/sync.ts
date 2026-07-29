@@ -194,8 +194,11 @@ export function initSync() {
     }
   });
 
-  // Emits INITIAL_SESSION on load (restored session) then SIGNED_IN/SIGNED_OUT.
-  supabase.auth.onAuthStateChange((_event, session) => {
+  // Emits INITIAL_SESSION on load, then SIGNED_IN / SIGNED_OUT. Crucially, a
+  // logged-out load fires INITIAL_SESSION with a null session — that is NOT a
+  // sign-out and must not wipe a genuine anonymous user's local data. Only a
+  // real SIGNED_OUT event clears local data.
+  supabase.auth.onAuthStateChange((event, session) => {
     if (session?.user) {
       onLogin(session.user.id);
       // If they signed in with Google (calendar scope granted), the session
@@ -207,7 +210,7 @@ export function initSync() {
           .getState()
           .adoptToken(session.provider_token, useStore.getState().currentWeekStart);
       }
-    } else {
+    } else if (event === "SIGNED_OUT") {
       onLogout();
       useGCal.getState().disconnect();
     }
