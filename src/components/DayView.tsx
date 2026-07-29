@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import { useStore } from "../store";
+import { useGCal, gcalDayItems } from "../lib/gcal";
+import { layoutDay, columnStyle, seamLeft } from "../lib/layout";
 import {
   GRID_START_H,
   GRID_END_H,
@@ -63,6 +65,11 @@ type Props = {
   onEdit: (block: Block) => void;
 };
 
+// Combined timeline item: a native block or a read-only Google Calendar event.
+type NativeItem = { kind: "native"; id: string; start: number; end: number; block: Block };
+type GEventItem = { kind: "gcal"; id: string; start: number; end: number; title: string };
+type Item = NativeItem | GEventItem;
+
 export function DayView({ onCreateRange, onEdit }: Props) {
   const blocks = useStore((s) => s.blocks);
   const tasks = useStore((s) => s.tasks);
@@ -72,6 +79,7 @@ export function DayView({ onCreateRange, onEdit }: Props) {
   const deleteBlock = useStore((s) => s.deleteBlock);
   const skipOccurrence = useStore((s) => s.skipOccurrence);
   const updateBlock = useStore((s) => s.updateBlock);
+  const gridEvents = useGCal((s) => s.gridEvents);
 
   const removeBlock = (b: Block) =>
     b.recurrence !== null ? skipOccurrence(b.id) : deleteBlock(b.id);
@@ -103,7 +111,6 @@ export function DayView({ onCreateRange, onEdit }: Props) {
     scrolledRef.current = true;
     const pending = useStore.getState().pendingScrollMinutes;
     if (pending != null) {
-      // jumped here from a Week-view block — land on that block
       el.scrollTop = Math.max(0, offsetForMinutes(pending) - 80);
       useStore.getState().clearPendingScroll();
     } else {
@@ -112,10 +119,33 @@ export function DayView({ onCreateRange, onEdit }: Props) {
   }, []);
 
   const catById = (id: string) => categories.find((c) => c.id === id);
-  const dayBlocks = blocks
-    .filter((b) => !b.skipped && b.date === selectedDate)
-    .sort((a, b) => a.startMinutes - b.startMinutes);
+  const dayBlocks = blocks.filter((b) => !b.skipped && b.date === selectedDate);
   const now = nowOffset(selectedDate);
+
+  // Native blocks + Google events share one overlap layout (§18c) — column
+  // widths are computed from stored times, so a live drag ghost moves vertically
+  // without reshuffling columns every frame.
+  const items: Item[] = [
+    ...dayBlocks.map(
+      (b): NativeItem => ({
+        kind: "native",
+        id: b.id,
+        start: b.startMinutes,
+        end: b.endMinutes,
+        block: b,
+      })
+    ),
+    ...gcalDayItems(gridEvents, selectedDate).map(
+      (g): GEventItem => ({
+        kind: "gcal",
+        id: "g_" + g.id,
+        start: g.start,
+        end: g.end,
+        title: g.title,
+      })
+    ),
+  ];
+  const laid = layoutDay(items);
 
   const hours: number[] = [];
   for (let h = GRID_START_H; h <= GRID_END_H; h++) hours.push(h);
@@ -145,7 +175,30 @@ export function DayView({ onCreateRange, onEdit }: Props) {
             onPointerMove={create.onPointerMove}
             onPointerUp={create.onPointerUp}
           >
-            {dayBlocks.map((b) => {
+            {laid.map((item) => {
+              const col = columnStyle(item.col, item.totalCols);
+              const seam = seamLeft(item.col, item.totalCols);
+
+              if (item.kind === "gcal") {
+                const top = offsetForMinutes(item.start);
+                const height = Math.max(24, ((item.end - item.start) / 60) * HOUR_H - 4);
+                return (
+                  <div key={item.id}>
+                    <div
+                      className="dt-gcal"
+                      style={{ top, height, ...col }}
+                      title={`${item.title} (from Google Calendar — read-only)`}
+                    >
+                      <span className="dt-gcal-badge">G</span>
+                      <span className="dt-gcal-title">{item.title}</span>
+                      <span className="dt-gcal-time">{fmtTime(item.start)}</span>
+                    </div>
+                    {seam && <Seam left={seam} top={top} height={height} />}
+                  </div>
+                );
+              }
+
+              const b = item.block;
               const cat = catById(b.categoryId);
               if (!cat) return null;
               const isDragging = drag.live?.id === b.id;
@@ -153,92 +206,85 @@ export function DayView({ onCreateRange, onEdit }: Props) {
               const endM = isDragging ? drag.live!.end : b.endMinutes;
               const top = offsetForMinutes(startM);
               const blockTasks = tasks.filter((t) => t.blockId === b.id);
-              // §16: height is strictly time-based — NEVER estimated from task/
-              // content count, or content bleeds into the block below. Content
-              // scrolls inside the block instead. Small constant floor only.
               const height = Math.max(24, ((endM - startM) / 60) * HOUR_H - 4);
               const selected = selectedId === b.id;
               return (
-                <div
-                  key={b.id}
-                  className={`dt-block${selected ? " selected" : ""}${
-                    isDragging ? " dragging" : ""
-                  }`}
-                  style={{ top, height, ...blockStyle(cat) }}
-                  onPointerDown={(e) => drag.onPointerDown(e, b)}
-                  onPointerMove={drag.onPointerMove}
-                  onPointerUp={drag.onPointerUp}
-                  title={
-                    selected
-                      ? "Drag to move, drag edges to resize, click to edit"
-                      : "Click to select"
-                  }
-                >
-                  {/* Fixed frame — always visible, never scrolls (§16 follow-up) */}
-                  <div className="dt-head">
-                    <span
-                      className="dt-tag"
-                      style={{ background: cat.color + "33", color: cat.color }}
-                    >
-                      {cat.name.toUpperCase()}
-                    </span>
-                    <span className="dt-title">{b.title || cat.name}</span>
-                    <span className="dt-time">{fmtTime(startM)}</span>
-                    <button
-                      className="dt-del"
-                      aria-label="Delete block"
-                      onClick={() => {
-                        if (selectedId === b.id) setSelectedId(null);
-                        removeBlock(b);
-                      }}
-                    >
-                      <XSmall />
-                    </button>
-                  </div>
-                  {/* Only tasks/notes scroll, with the fade hint */}
-                  <BlockScroll>
-                    <div className="dt-tasks">
-                      {blockTasks.map((t) => (
-                        <div key={t.id} className={`dt-task ${t.done ? "done" : ""}`}>
-                          <input
-                            type="checkbox"
-                            checked={t.done}
-                            onChange={() => toggleTask(t.id)}
-                            id={`dt-${t.id}`}
-                          />
-                          <label htmlFor={`dt-${t.id}`}>{t.title}</label>
-                        </div>
-                      ))}
+                <div key={b.id}>
+                  <div
+                    className={`dt-block${selected ? " selected" : ""}${
+                      isDragging ? " dragging" : ""
+                    }`}
+                    style={{ top, height, ...blockStyle(cat), ...col }}
+                    onPointerDown={(e) => drag.onPointerDown(e, b)}
+                    onPointerMove={drag.onPointerMove}
+                    onPointerUp={drag.onPointerUp}
+                    title={
+                      selected
+                        ? "Drag to move, drag edges to resize, click to edit"
+                        : "Click to select"
+                    }
+                  >
+                    <div className="dt-head">
+                      <span
+                        className="dt-tag"
+                        style={{ background: cat.color + "33", color: cat.color }}
+                      >
+                        {cat.name.toUpperCase()}
+                      </span>
+                      <span className="dt-title">{b.title || cat.name}</span>
+                      <span className="dt-time">{fmtTime(startM)}</span>
+                      <button
+                        className="dt-del"
+                        aria-label="Delete block"
+                        onClick={() => {
+                          if (selectedId === b.id) setSelectedId(null);
+                          removeBlock(b);
+                        }}
+                      >
+                        <XSmall />
+                      </button>
                     </div>
-                    <textarea
-                      className="dt-notes"
-                      placeholder="Notes…"
-                      value={b.notes ?? ""}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
-                    />
-                    <EstimatePrompt block={b} />
-                  </BlockScroll>
-                  {selected && (
-                    <>
-                      <div
-                        className="resize-handle top"
-                        onPointerDown={(e) =>
-                          drag.onPointerDown(e, b, "resize-start")
-                        }
-                        onPointerMove={drag.onPointerMove}
-                        onPointerUp={drag.onPointerUp}
+                    <BlockScroll>
+                      <div className="dt-tasks">
+                        {blockTasks.map((t) => (
+                          <div key={t.id} className={`dt-task ${t.done ? "done" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={t.done}
+                              onChange={() => toggleTask(t.id)}
+                              id={`dt-${t.id}`}
+                            />
+                            <label htmlFor={`dt-${t.id}`}>{t.title}</label>
+                          </div>
+                        ))}
+                      </div>
+                      <textarea
+                        className="dt-notes"
+                        placeholder="Notes…"
+                        value={b.notes ?? ""}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
                       />
-                      <div
-                        className="resize-handle bottom"
-                        onPointerDown={(e) =>
-                          drag.onPointerDown(e, b, "resize-end")
-                        }
-                        onPointerMove={drag.onPointerMove}
-                        onPointerUp={drag.onPointerUp}
-                      />
-                    </>
-                  )}
+                      <EstimatePrompt block={b} />
+                    </BlockScroll>
+                    {selected && (
+                      <>
+                        <div
+                          className="resize-handle top"
+                          onPointerDown={(e) => drag.onPointerDown(e, b, "resize-start")}
+                          onPointerMove={drag.onPointerMove}
+                          onPointerUp={drag.onPointerUp}
+                        />
+                        <div
+                          className="resize-handle bottom"
+                          onPointerDown={(e) => drag.onPointerDown(e, b, "resize-end")}
+                          onPointerMove={drag.onPointerMove}
+                          onPointerUp={drag.onPointerUp}
+                        />
+                      </>
+                    )}
+                  </div>
+                  {seam && <Seam left={seam} top={top} height={height} />}
                 </div>
               );
             })}
@@ -260,5 +306,11 @@ export function DayView({ onCreateRange, onEdit }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+function Seam({ left, top, height }: { left: string; top: number; height: number }) {
+  return (
+    <div className="seam-handle" style={{ left, top: top + height / 2 - 13 }} />
   );
 }

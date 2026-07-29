@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
+import { useGCal, gcalDayItems } from "../lib/gcal";
+import { layoutDay, columnStyle, seamLeft } from "../lib/layout";
 import {
   DAYS,
   GRID_START_H,
@@ -33,6 +35,10 @@ type Props = {
   onEdit: (block: Block) => void;
 };
 
+type NativeItem = { kind: "native"; id: string; start: number; end: number; block: Block };
+type GEventItem = { kind: "gcal"; id: string; start: number; end: number; title: string };
+type Item = NativeItem | GEventItem;
+
 export function WeekView({ onCreateRange, onEdit }: Props) {
   const blocks = useStore((s) => s.blocks);
   const categories = useStore((s) => s.categories);
@@ -40,13 +46,11 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
   const deleteBlock = useStore((s) => s.deleteBlock);
   const skipOccurrence = useStore((s) => s.skipOccurrence);
   const updateBlock = useStore((s) => s.updateBlock);
+  const gridEvents = useGCal((s) => s.gridEvents);
 
-  // a recurring instance is tombstoned (won't regenerate); a one-off is removed
   const removeBlock = (b: Block) =>
     b.recurrence !== null ? skipOccurrence(b.id) : deleteBlock(b.id);
 
-  // one click selects (highlights) a block; a second click on the selected
-  // block opens the editor. Only a selected block can be dragged to move.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const create = useDragCreate(onCreateRange);
@@ -55,7 +59,7 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
       updateBlock(id, { startMinutes: start, endMinutes: end }),
     onTap: (block) => {
       if (selectedId === block.id) {
-        setSelectedId(null); // opening the editor returns to neutral
+        setSelectedId(null);
         onEdit(block);
       } else {
         setSelectedId(block.id);
@@ -102,9 +106,28 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
             ))}
           </div>
           {weekDates.map((iso) => {
-            const dayBlocks = visibleBlocks
-              .filter((b) => b.date === iso)
-              .sort((a, b) => a.startMinutes - b.startMinutes);
+            const dayBlocks = visibleBlocks.filter((b) => b.date === iso);
+            const items: Item[] = [
+              ...dayBlocks.map(
+                (b): NativeItem => ({
+                  kind: "native",
+                  id: b.id,
+                  start: b.startMinutes,
+                  end: b.endMinutes,
+                  block: b,
+                })
+              ),
+              ...gcalDayItems(gridEvents, iso).map(
+                (g): GEventItem => ({
+                  kind: "gcal",
+                  id: "g_" + g.id,
+                  start: g.start,
+                  end: g.end,
+                  title: g.title,
+                })
+              ),
+            ];
+            const laid = layoutDay(items);
             const now = nowOffset(iso);
             return (
               <div
@@ -112,76 +135,111 @@ export function WeekView({ onCreateRange, onEdit }: Props) {
                 className="day-col"
                 style={{ height: GRID_HEIGHT }}
                 onPointerDown={(e) => {
-                  // pressing empty space deselects, then may start a create-drag
                   if (e.target === e.currentTarget) setSelectedId(null);
                   create.onPointerDown(e, iso);
                 }}
                 onPointerMove={create.onPointerMove}
                 onPointerUp={create.onPointerUp}
               >
-                {dayBlocks.map((b) => {
+                {laid.map((item) => {
+                  const col = columnStyle(item.col, item.totalCols);
+                  const seam = seamLeft(item.col, item.totalCols);
+
+                  if (item.kind === "gcal") {
+                    const top = offsetForMinutes(item.start);
+                    const height = Math.max(
+                      24,
+                      ((item.end - item.start) / 60) * HOUR_H - 2
+                    );
+                    return (
+                      <div key={item.id}>
+                        <div
+                          className="block gcal"
+                          style={{ top, height, ...col }}
+                          title={`${item.title} (Google Calendar — read-only)`}
+                        >
+                          <span className="b-title">
+                            <span className="wk-gcal-badge">G</span>
+                            {item.title}
+                          </span>
+                        </div>
+                        {seam && (
+                          <div
+                            className="seam-handle"
+                            style={{ left: seam, top: top + height / 2 - 13 }}
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const b = item.block;
                   const cat = catById(b.categoryId);
                   if (!cat) return null;
                   const isDragging = drag.live?.id === b.id;
                   const startM = isDragging ? drag.live!.start : b.startMinutes;
                   const endM = isDragging ? drag.live!.end : b.endMinutes;
                   const top = offsetForMinutes(startM);
-                  const height = Math.max(
-                    26,
-                    ((endM - startM) / 60) * HOUR_H - 2
-                  );
+                  const height = Math.max(26, ((endM - startM) / 60) * HOUR_H - 2);
                   const selected = selectedId === b.id;
                   return (
-                    <div
-                      key={b.id}
-                      className={`block${selected ? " selected" : ""}${
-                        isDragging ? " dragging" : ""
-                      }`}
-                      style={{ top, height, ...blockStyle(cat) }}
-                      onPointerDown={(e) => drag.onPointerDown(e, b)}
-                      onPointerMove={drag.onPointerMove}
-                      onPointerUp={drag.onPointerUp}
-                      title={
-                        selected
-                          ? "Drag to move, drag edges to resize, click to edit"
-                          : "Click to select"
-                      }
-                    >
-                      <button
-                        className="b-del"
-                        aria-label="Delete block"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (selectedId === b.id) setSelectedId(null);
-                          removeBlock(b);
-                        }}
+                    <div key={b.id}>
+                      <div
+                        className={`block${selected ? " selected" : ""}${
+                          isDragging ? " dragging" : ""
+                        }`}
+                        style={{ top, height, ...blockStyle(cat), ...col }}
+                        onPointerDown={(e) => drag.onPointerDown(e, b)}
+                        onPointerMove={drag.onPointerMove}
+                        onPointerUp={drag.onPointerUp}
+                        title={
+                          selected
+                            ? "Drag to move, drag edges to resize, click to edit"
+                            : "Click to select"
+                        }
                       >
-                        <XSmall />
-                      </button>
-                      <span className="b-title">{b.title || cat.name}</span>
-                      <span className="b-time">
-                        {fmtTime(startM)} – {fmtTime(endM)}
-                      </span>
-                      {selected && (
-                        <>
-                          <div
-                            className="resize-handle top"
-                            onPointerDown={(e) =>
-                              drag.onPointerDown(e, b, "resize-start")
-                            }
-                            onPointerMove={drag.onPointerMove}
-                            onPointerUp={drag.onPointerUp}
-                          />
-                          <div
-                            className="resize-handle bottom"
-                            onPointerDown={(e) =>
-                              drag.onPointerDown(e, b, "resize-end")
-                            }
-                            onPointerMove={drag.onPointerMove}
-                            onPointerUp={drag.onPointerUp}
-                          />
-                        </>
+                        <button
+                          className="b-del"
+                          aria-label="Delete block"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (selectedId === b.id) setSelectedId(null);
+                            removeBlock(b);
+                          }}
+                        >
+                          <XSmall />
+                        </button>
+                        <span className="b-title">{b.title || cat.name}</span>
+                        <span className="b-time">
+                          {fmtTime(startM)} – {fmtTime(endM)}
+                        </span>
+                        {selected && (
+                          <>
+                            <div
+                              className="resize-handle top"
+                              onPointerDown={(e) =>
+                                drag.onPointerDown(e, b, "resize-start")
+                              }
+                              onPointerMove={drag.onPointerMove}
+                              onPointerUp={drag.onPointerUp}
+                            />
+                            <div
+                              className="resize-handle bottom"
+                              onPointerDown={(e) =>
+                                drag.onPointerDown(e, b, "resize-end")
+                              }
+                              onPointerMove={drag.onPointerMove}
+                              onPointerUp={drag.onPointerUp}
+                            />
+                          </>
+                        )}
+                      </div>
+                      {seam && (
+                        <div
+                          className="seam-handle"
+                          style={{ left: seam, top: top + height / 2 - 13 }}
+                        />
                       )}
                     </div>
                   );

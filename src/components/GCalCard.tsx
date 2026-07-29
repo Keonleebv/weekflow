@@ -1,34 +1,8 @@
 import { useState } from "react";
-import { track } from "@vercel/analytics";
-import type { GCalEvent } from "../types";
+import { useGCal } from "../lib/gcal";
+import { useStore } from "../store";
 
-/* Google Identity Services token client (implicit OAuth2) — client-side only.
-   Read-only scope: pulls invites in, never writes. Token lives in memory only
-   (module-level), so it clears on refresh — reconnect each session. */
-const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
-const CLIENT_ID_STORAGE_KEY = "weekflow-gcal-client-id";
 const ENV_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const google: any;
-
-let tokenClient: ReturnType<typeof initClient> | null = null;
-let accessToken: string | null = null;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function initClient(clientId: string, callback: (resp: any) => void) {
-  return google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: GCAL_SCOPE,
-    callback,
-  });
-}
-
-const FAKE_EVENTS = [
-  { summary: "Team Standup", time: "9:00 AM" },
-  { summary: "Interview Prep", time: "2:30 PM" },
-  { summary: "Dentist Appt", time: "4:00 PM" },
-];
 
 function fmtEventTime(iso: string): string {
   const d = new Date(iso);
@@ -41,97 +15,25 @@ function fmtEventTime(iso: string): string {
   return h12 + (m ? ":" + String(m).padStart(2, "0") : "") + ap;
 }
 
+const FAKE_EVENTS = [
+  { summary: "Team Standup", time: "9:00 AM" },
+  { summary: "Interview Prep", time: "2:30 PM" },
+  { summary: "Dentist Appt", time: "4:00 PM" },
+];
+
 export function GCalCard() {
-  const [clientId, setClientId] = useState(
-    ENV_CLIENT_ID || localStorage.getItem(CLIENT_ID_STORAGE_KEY) || ""
-  );
+  const clientId = useGCal((s) => s.clientId);
+  const connected = useGCal((s) => s.connected);
+  const events = useGCal((s) => s.sidebarEvents);
+  const error = useGCal((s) => s.error);
+  const setClientIdFromInput = useGCal((s) => s.setClientIdFromInput);
+  const resetClientId = useGCal((s) => s.resetClientId);
+  const connect = useGCal((s) => s.connect);
+  const disconnect = useGCal((s) => s.disconnect);
+  const currentWeekStart = useStore((s) => s.currentWeekStart);
+
   const [clientIdInput, setClientIdInput] = useState("");
-  const [connected, setConnected] = useState(false);
-  const [events, setEvents] = useState<GCalEvent[] | null>(null);
-  const [error, setError] = useState("");
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
-
-  const saveClientId = () => {
-    const val = clientIdInput.trim();
-    if (!val) return;
-    localStorage.setItem(CLIENT_ID_STORAGE_KEY, val);
-    tokenClient = null;
-    setClientId(val);
-  };
-
-  const changeClientId = () => {
-    localStorage.removeItem(CLIENT_ID_STORAGE_KEY);
-    accessToken = null;
-    tokenClient = null;
-    setClientId(ENV_CLIENT_ID || "");
-    setConnected(false);
-    setEvents(null);
-    setError("");
-  };
-
-  const fetchEvents = () => {
-    setError("");
-    const timeMin = new Date().toISOString();
-    const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
-        timeMin
-      )}&timeMax=${encodeURIComponent(
-        timeMax
-      )}&singleEvents=true&orderBy=startTime&maxResults=10`,
-      { headers: { Authorization: "Bearer " + accessToken } }
-    )
-      .then((r) => {
-        if (!r.ok) throw new Error("Google Calendar request failed (" + r.status + ")");
-        return r.json();
-      })
-      .then((data) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const items = (data.items || []).map((ev: any) => ({
-          id: ev.id,
-          summary: ev.summary || "(untitled)",
-          start: ev.start?.dateTime || ev.start?.date || "",
-          end: ev.end?.dateTime || ev.end?.date || "",
-          htmlLink: ev.htmlLink || "",
-        }));
-        setEvents(items);
-        setConnected(true);
-        track("gcal_connected");
-      })
-      .catch((e: Error) => setError(e.message || "Could not load events."));
-  };
-
-  const connect = () => {
-    if (!clientId) return;
-    setError("");
-    if (typeof google === "undefined" || !google.accounts?.oauth2) {
-      setError("Google sign-in script not loaded yet — try again in a moment.");
-      return;
-    }
-    if (!tokenClient) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tokenClient = initClient(clientId, (resp: any) => {
-        if (resp.error) {
-          setError("Sign-in was cancelled or denied.");
-          return;
-        }
-        accessToken = resp.access_token;
-        fetchEvents();
-      });
-    }
-    tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
-  };
-
-  const disconnect = () => {
-    if (accessToken && typeof google !== "undefined") {
-      google.accounts.oauth2.revoke(accessToken, () => {});
-    }
-    accessToken = null;
-    setConnected(false);
-    setEvents(null);
-    setError("");
-  };
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
     <>
@@ -188,7 +90,7 @@ export function GCalCard() {
               value={clientIdInput}
               onChange={(e) => setClientIdInput(e.target.value)}
             />
-            <button type="button" onClick={saveClientId}>
+            <button type="button" onClick={() => setClientIdFromInput(clientIdInput)}>
               Save
             </button>
           </div>
@@ -226,7 +128,7 @@ export function GCalCard() {
       <button
         className={`btn-ghost ${connected ? "danger" : ""}`}
         disabled={!clientId}
-        onClick={() => (connected ? disconnect() : connect())}
+        onClick={() => (connected ? disconnect() : connect(currentWeekStart))}
       >
         {connected ? "Disconnect" : "Connect Google Calendar"}
       </button>
@@ -234,9 +136,9 @@ export function GCalCard() {
       {clientId && (
         <div className="gcal-status">
           <span className={connected ? "dot-live" : "dot-off"} />
-          {connected ? "Synced with Google Calendar" : "Not connected"}
+          {connected ? "Synced — also shown on your timeline" : "Not connected"}
           {!ENV_CLIENT_ID && (
-            <span className="gcal-edit-link" onClick={changeClientId}>
+            <span className="gcal-edit-link" onClick={resetClientId}>
               change client ID
             </span>
           )}

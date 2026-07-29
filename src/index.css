@@ -162,6 +162,15 @@ input{font-family:inherit;}
 .block:hover .b-del{opacity:.7;}
 .block .b-del:hover{opacity:1;}
 
+/* Seam handle between two touching overlap columns (§18c) */
+.seam-handle{position:absolute;width:4px;height:26px;border-radius:3px;background:rgba(255,255,255,.28);z-index:6;pointer-events:none;}
+
+/* Google Calendar event on the week grid — dashed, read-only, non-editable */
+.block.gcal{
+  background:#38bdf814;border:1px dashed #38bdf877;color:#38bdf8;cursor:default;
+}
+.wk-gcal-badge{display:inline-flex;align-items:center;justify-content:center;width:11px;height:11px;border-radius:3px;background:#38bdf8;color:#0a0c0f;font-size:7.5px;font-weight:800;margin-right:4px;vertical-align:middle;}
+
 /* day timeline (day view, bigger cards) */
 .day-timeline-scroll{flex:1;overflow-y:auto;padding:12px 22px 40px;}
 .day-timeline{position:relative;display:grid;grid-template-columns:56px 1fr;}
@@ -176,6 +185,15 @@ input{font-family:inherit;}
   overflow:hidden;cursor:grab;touch-action:none;
   display:flex;flex-direction:column;
 }
+/* Google Calendar event on the day timeline — dashed, read-only (§18a) */
+.dt-gcal{
+  position:absolute;border:1px dashed #38bdf877;background:#38bdf814;color:#38bdf8;
+  border-radius:12px;overflow:hidden;padding:6px 10px;cursor:default;
+  display:flex;align-items:center;gap:6px;box-sizing:border-box;
+}
+.dt-gcal-badge{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;background:#38bdf8;color:#0a0c0f;font-size:9px;font-weight:800;flex-shrink:0;}
+.dt-gcal-title{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dt-gcal-time{margin-left:auto;font-size:9.5px;color:#38bdf8aa;white-space:nowrap;flex-shrink:0;}
 /* §16 follow-up: only tasks/notes scroll — the header is a fixed frame above
    this, so the block name is always visible even on short blocks. */
 .dt-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 14px 10px;box-sizing:border-box;}

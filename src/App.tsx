@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "./store";
+import { useGCal } from "./lib/gcal";
 import { Rail } from "./components/Rail";
 import { TopBar } from "./components/TopBar";
 import { DayPills } from "./components/DayPills";
@@ -23,6 +24,7 @@ function App() {
   const mode = useStore((s) => s.mode);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const onboarded = useStore((s) => s.onboarded);
+  const currentWeekStart = useStore((s) => s.currentWeekStart);
   const setView = useStore((s) => s.setView);
   const ensureCurrentWeek = useStore((s) => s.ensureCurrentWeek);
   const [blockOpen, setBlockOpen] = useState(false);
@@ -88,6 +90,23 @@ function App() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [blockOpen, allocOpen, openAdd, closeBlock, mode]);
+
+  // GCal timeline overlay: refetch the visible week (±1wk buffer) whenever the
+  // shown week changes, plus a quiet periodic refresh while connected (§18b).
+  useEffect(() => {
+    const gc = useGCal.getState();
+    if (gc.connected) gc.refreshGrid(currentWeekStart);
+  }, [currentWeekStart]);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const gc = useGCal.getState();
+      if (gc.connected) {
+        gc.refreshGrid(useStore.getState().currentWeekStart);
+        gc.refreshSidebar();
+      }
+    }, 180000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // re-render every minute to move the now-line
   const [, force] = useState(0);
