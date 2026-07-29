@@ -174,27 +174,29 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                       : "Click to select"
                   }
                 >
+                  {/* Fixed frame — always visible, never scrolls (§16 follow-up) */}
+                  <div className="dt-head">
+                    <span
+                      className="dt-tag"
+                      style={{ background: cat.color + "33", color: cat.color }}
+                    >
+                      {cat.name.toUpperCase()}
+                    </span>
+                    <span className="dt-title">{b.title || cat.name}</span>
+                    <span className="dt-time">{fmtTime(startM)}</span>
+                    <button
+                      className="dt-del"
+                      aria-label="Delete block"
+                      onClick={() => {
+                        if (selectedId === b.id) setSelectedId(null);
+                        removeBlock(b);
+                      }}
+                    >
+                      <XSmall />
+                    </button>
+                  </div>
+                  {/* Only tasks/notes scroll, with the fade hint */}
                   <BlockScroll>
-                    <div className="dt-head">
-                      <span
-                        className="dt-tag"
-                        style={{ background: cat.color + "33", color: cat.color }}
-                      >
-                        {cat.name.toUpperCase()}
-                      </span>
-                      <span className="dt-title">{b.title || cat.name}</span>
-                      <span className="dt-time">{fmtTime(startM)}</span>
-                      <button
-                        className="dt-del"
-                        aria-label="Delete block"
-                        onClick={() => {
-                          if (selectedId === b.id) setSelectedId(null);
-                          removeBlock(b);
-                        }}
-                      >
-                        <XSmall />
-                      </button>
-                    </div>
                     <div className="dt-tasks">
                       {blockTasks.map((t) => (
                         <div key={t.id} className={`dt-task ${t.done ? "done" : ""}`}>
