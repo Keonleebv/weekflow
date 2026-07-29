@@ -43,6 +43,8 @@ function App() {
   useEffect(() => {
     if (!onboarded && window.innerWidth <= 860) setView("day");
     ensureCurrentWeek();
+    // reconnect Google Calendar silently if it was connected before this reload
+    useGCal.getState().tryAutoConnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

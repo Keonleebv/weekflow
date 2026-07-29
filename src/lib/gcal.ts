@@ -2,21 +2,33 @@ import { create } from "zustand";
 import { track } from "@vercel/analytics";
 import type { GCalEvent } from "../types";
 import { addDaysISO } from "./time";
+import { useStore } from "../store";
 
-// Read-only Google Calendar, entirely client-side (§9). Token lives in memory
-// only — never localStorage — so it clears on refresh. This shared store lets
-// BOTH the sidebar list and the timeline overlay read the same connection.
+/** The week currently shown in the planner — the range the grid overlay fetches. */
+const currentWeek = () => useStore.getState().currentWeekStart;
+
+// Read-only Google Calendar, entirely client-side (§9). The token lives in
+// memory only — never localStorage — so it clears on refresh. We DO persist a
+// tiny boolean ("was connected"), which lets us ask Google for a fresh token
+// silently on the next load (no popup) if the grant + Google session are still
+// live — so a refresh no longer forces a manual reconnect.
 
 const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 const CLIENT_ID_STORAGE_KEY = "weekflow-gcal-client-id";
+const AUTO_KEY = "weekflow-gcal-auto"; // "1" once connected; enables silent reconnect
 const ENV_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const google: any;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let tokenClient: any = null;
 let accessToken: string | null = null;
+
+/** Run cb once the GIS script has loaded (it's async in index.html). */
+function whenGoogleReady(cb: () => void, onFail?: () => void, tries = 0) {
+  if (typeof google !== "undefined" && google.accounts?.oauth2) return cb();
+  if (tries > 40) return onFail?.(); // ~10s
+  setTimeout(() => whenGoogleReady(cb, onFail, tries + 1), 250);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapEvents(items: any[]): GCalEvent[] {
@@ -62,6 +74,7 @@ type GCalState = {
   setClientIdFromInput: (val: string) => void;
   resetClientId: () => void;
   connect: (weekStart: string) => void;
+  tryAutoConnect: () => void;
   disconnect: () => void;
   adoptToken: (token: string, weekStart: string) => void;
   refreshSidebar: () => Promise<void>;
@@ -80,14 +93,13 @@ export const useGCal = create<GCalState>((set, get) => ({
     const v = val.trim();
     if (!v) return;
     localStorage.setItem(CLIENT_ID_STORAGE_KEY, v);
-    tokenClient = null;
     set({ clientId: v });
   },
 
   resetClientId: () => {
     localStorage.removeItem(CLIENT_ID_STORAGE_KEY);
+    localStorage.removeItem(AUTO_KEY);
     accessToken = null;
-    tokenClient = null;
     set({
       clientId: ENV_CLIENT_ID || "",
       connected: false,
@@ -126,29 +138,53 @@ export const useGCal = create<GCalState>((set, get) => ({
     const { clientId } = get();
     if (!clientId) return;
     set({ error: "" });
-    if (typeof google === "undefined" || !google.accounts?.oauth2) {
-      set({ error: "Google sign-in script not loaded yet — try again in a moment." });
-      return;
-    }
-    if (!tokenClient) {
-      tokenClient = google.accounts.oauth2.initTokenClient({
+    whenGoogleReady(
+      () => {
+        const tc = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: GCAL_SCOPE,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          callback: (resp: any) => {
+            if (resp.error) {
+              set({ error: "Sign-in was cancelled or denied." });
+              return;
+            }
+            accessToken = resp.access_token;
+            localStorage.setItem(AUTO_KEY, "1");
+            set({ connected: true, error: "" });
+            track("gcal_connected");
+            get().refreshSidebar();
+            get().refreshGrid(weekStart);
+          },
+        });
+        tc.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+      },
+      () => set({ error: "Google sign-in script not loaded yet — try again in a moment." })
+    );
+  },
+
+  // Silent reconnect on load — no popup. Only attempts if a prior connection
+  // was recorded and Google still has a live grant + session for this client.
+  tryAutoConnect: () => {
+    const { clientId } = get();
+    if (!clientId || accessToken) return;
+    if (localStorage.getItem(AUTO_KEY) !== "1") return;
+    whenGoogleReady(() => {
+      const tc = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: GCAL_SCOPE,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         callback: (resp: any) => {
-          if (resp.error) {
-            set({ error: "Sign-in was cancelled or denied." });
-            return;
-          }
+          if (resp.error) return; // stay disconnected quietly
           accessToken = resp.access_token;
-          set({ connected: true });
-          track("gcal_connected");
+          set({ connected: true, error: "" });
           get().refreshSidebar();
-          get().refreshGrid(weekStart);
+          get().refreshGrid(currentWeek());
         },
+        error_callback: () => {}, // silent — leave the Connect button
       });
-    }
-    tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+      tc.requestAccessToken({ prompt: "" });
+    });
   },
 
   disconnect: () => {
@@ -156,6 +192,7 @@ export const useGCal = create<GCalState>((set, get) => ({
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
     accessToken = null;
+    localStorage.removeItem(AUTO_KEY); // don't silently reconnect after an explicit disconnect
     set({ connected: false, sidebarEvents: null, gridEvents: [], error: "" });
   },
 
@@ -165,6 +202,7 @@ export const useGCal = create<GCalState>((set, get) => ({
   // once it expires, the Connect button re-establishes it via GIS.
   adoptToken: (token, weekStart) => {
     accessToken = token;
+    localStorage.setItem(AUTO_KEY, "1"); // enable silent GIS reconnect after reload
     set({ connected: true, error: "" });
     get().refreshSidebar();
     get().refreshGrid(weekStart);
