@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/summarize.ts": {
+      "maxDuration": 15,
+      "memory": 256
+    }
+  }
+}

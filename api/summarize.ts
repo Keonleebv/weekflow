@@ -1,18 +1,53 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
 // Haiku 4.5 — cheapest/fastest, plenty for a short bullet summary.
 const MODEL = "claude-haiku-4-5";
 const MAX_INPUT_CHARS = 8000; // journal entries are short; caps per-call cost
 const MAX_OUTPUT_TOKENS = 512;
 
-// Simple per-IP rate limit. Best-effort only — serverless instances are
-// ephemeral, so this catches bursts on a warm instance but is not a hard
-// global cap. The real backstop against runaway cost is a monthly spend
-// limit set in the Anthropic console.
+// ── Rate limiting ─────────────────────────────────────────────────────────
+// Two gates protect the one paid endpoint from abuse / cost-DDoS:
+//   1. per-IP   — a single client can't spam it
+//   2. app-wide — a HARD ceiling on total calls/min no matter how many IPs an
+//                 attacker rotates through (blunts distributed abuse)
+//
+// When Upstash Redis is configured (set UPSTASH_REDIS_REST_URL +
+// UPSTASH_REDIS_REST_TOKEN in Vercel — one click via the Upstash integration)
+// both gates are DURABLE and GLOBAL across every serverless instance. Without
+// it we fall back to a best-effort in-memory limiter that only sees one warm
+// instance. The ultimate cost backstop is a monthly spend cap in the Anthropic
+// console (see README / deploy notes).
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 8; // requests per IP per minute
+const GLOBAL_MAX = 120; // total requests per minute across ALL callers
+
+const upstashReady =
+  !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const perIpLimiter = upstashReady
+  ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(RATE_MAX, "60 s"),
+      prefix: "wf-sum-ip",
+      analytics: false,
+    })
+  : null;
+
+const globalLimiter = upstashReady
+  ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(GLOBAL_MAX, "60 s"),
+      prefix: "wf-sum-global",
+      analytics: false,
+    })
+  : null;
+
+// In-memory fallback state (per instance only).
 const hits = new Map<string, number[]>();
+const globalHits: number[] = [];
 
 // Origins allowed to call this endpoint. Override in Vercel with a
 // comma-separated ALLOWED_ORIGINS env var (e.g. a custom domain).
@@ -32,13 +67,38 @@ function clientIp(req: VercelRequest): string {
   return (req.headers["x-real-ip"] as string) || "unknown";
 }
 
-function rateLimited(ip: string): boolean {
+function memPerIpLimited(ip: string): boolean {
   const now = Date.now();
   const recent = (hits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   recent.push(now);
   hits.set(ip, recent);
   if (hits.size > 5000) hits.clear(); // crude memory guard
   return recent.length > RATE_MAX;
+}
+
+function memGlobalLimited(): boolean {
+  const now = Date.now();
+  while (globalHits.length && now - globalHits[0] >= RATE_WINDOW_MS) {
+    globalHits.shift();
+  }
+  globalHits.push(now);
+  return globalHits.length > GLOBAL_MAX;
+}
+
+// True if either the per-IP or the app-wide ceiling is exceeded. Uses the
+// durable Upstash limiter when configured, else the in-memory fallback.
+async function rateLimited(ip: string): Promise<boolean> {
+  if (perIpLimiter && globalLimiter) {
+    const [ipRes, globalRes] = await Promise.all([
+      perIpLimiter.limit(ip),
+      globalLimiter.limit("all"),
+    ]);
+    return !ipRes.success || !globalRes.success;
+  }
+  // Order matters: always record both so neither counter is skipped.
+  const ipHit = memPerIpLimited(ip);
+  const globalHit = memGlobalLimited();
+  return ipHit || globalHit;
 }
 
 const SYSTEM_PROMPT =
@@ -72,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: "Origin not allowed." });
   }
 
-  if (rateLimited(clientIp(req))) {
+  if (await rateLimited(clientIp(req))) {
     res.setHeader("Retry-After", "60");
     return res.status(429).json({ error: "Too many requests — try again shortly." });
   }
