@@ -7,39 +7,63 @@ import { useStore } from "../store";
 /** The week currently shown in the planner — the range the grid overlay fetches. */
 const currentWeek = () => useStore.getState().currentWeekStart;
 
-// Read-only Google Calendar, entirely client-side (§9). The token lives in
-// memory only — never localStorage — so it clears on refresh. We DO persist a
-// tiny boolean ("was connected"), which lets us ask Google for a fresh token
-// silently on the next load (no popup) if the grant + Google session are still
-// live — so a refresh no longer forces a manual reconnect.
+// Read-only Google Calendar, entirely client-side (§9). The connection is
+// ACCOUNT-SCOPED: it's tied to the signed-in Weekflow account, tagged onto the
+// stored token so one account never sees another's calendar, and it drops on
+// sign-out. The short-lived token lives in sessionStorage (tab-scoped, cleared
+// when the tab closes — never localStorage at rest) so a refresh reconnects the
+// same account deterministically. A tiny per-account "was connected" flag also
+// enables a best-effort silent GIS reconnect.
 
 const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 const CLIENT_ID_STORAGE_KEY = "weekflow-gcal-client-id";
-const AUTO_KEY = "weekflow-gcal-auto"; // "1" once connected; enables silent reconnect
-// Short-lived Google access token kept in sessionStorage (tab-scoped, cleared
-// when the tab closes) so a refresh reconnects deterministically — unlike the
-// silent GIS re-auth, which browsers block under strict third-party-cookie
-// rules. Never localStorage: it must not survive the browser session at rest.
-const TOKEN_KEY = "weekflow-gcal-token";
+const TOKEN_KEY = "weekflow-gcal-token"; // sessionStorage
+const TOKEN_ACCT_KEY = "weekflow-gcal-token-acct"; // which account owns that token
 const ENV_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const google: any;
 
 let accessToken: string | null = null;
+// The signed-in Weekflow account the calendar connection belongs to. "" means
+// no account (Supabase off, or connecting while logged out).
+let currentAccount = "";
+
+const autoKey = () => "weekflow-gcal-auto:" + currentAccount;
+
+function ss(): Storage | null {
+  try {
+    return sessionStorage;
+  } catch {
+    return null;
+  }
+}
 
 function setToken(token: string) {
   accessToken = token;
+  ss()?.setItem(TOKEN_KEY, token);
+  ss()?.setItem(TOKEN_ACCT_KEY, currentAccount);
   try {
-    sessionStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(autoKey(), "1");
   } catch {
-    /* sessionStorage unavailable — fall back to memory only */
+    /* ignore */
   }
 }
+
+// Suspend on sign-out: drop the live connection + hidden events, but KEEP the
+// tab's stored token so re-logging into the SAME account restores it.
+function suspendToken() {
+  accessToken = null;
+}
+
+// Full teardown for an explicit Disconnect: forget the token and the per-account
+// reconnect memory entirely.
 function clearToken() {
   accessToken = null;
+  ss()?.removeItem(TOKEN_KEY);
+  ss()?.removeItem(TOKEN_ACCT_KEY);
   try {
-    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(autoKey());
   } catch {
     /* ignore */
   }
@@ -99,6 +123,8 @@ type GCalState = {
   tryAutoConnect: () => void;
   disconnect: () => void;
   adoptToken: (token: string, weekStart: string) => void;
+  setAccount: (id: string) => void;
+  suspend: () => void;
   refreshSidebar: () => Promise<void>;
   refreshGrid: (weekStart: string) => Promise<void>;
 };
@@ -120,8 +146,7 @@ export const useGCal = create<GCalState>((set, get) => ({
 
   resetClientId: () => {
     localStorage.removeItem(CLIENT_ID_STORAGE_KEY);
-    localStorage.removeItem(AUTO_KEY);
-    accessToken = null;
+    clearToken();
     set({
       clientId: ENV_CLIENT_ID || "",
       connected: false,
@@ -172,7 +197,6 @@ export const useGCal = create<GCalState>((set, get) => ({
               return;
             }
             setToken(resp.access_token);
-            localStorage.setItem(AUTO_KEY, "1");
             set({ connected: true, error: "" });
             track("gcal_connected");
             get().refreshSidebar();
@@ -185,19 +209,16 @@ export const useGCal = create<GCalState>((set, get) => ({
     );
   },
 
-  // Reconnect on load. First reuse a still-valid token from this tab's
-  // sessionStorage (survives refresh reliably). If none, fall back to a silent,
-  // no-popup GIS re-auth — best-effort, since browsers may block it.
+  // Reconnect for the CURRENT account only. First reuse this tab's stored token
+  // if it belongs to this account (survives refresh reliably). If none, fall
+  // back to a silent, no-popup GIS re-auth — best-effort, browsers may block it.
   tryAutoConnect: () => {
     const { clientId } = get();
     if (accessToken) return;
-    let stored: string | null = null;
-    try {
-      stored = sessionStorage.getItem(TOKEN_KEY);
-    } catch {
-      /* ignore */
-    }
-    if (stored) {
+    const store = ss();
+    const stored = store?.getItem(TOKEN_KEY) ?? null;
+    const storedAcct = store?.getItem(TOKEN_ACCT_KEY) ?? "";
+    if (stored && storedAcct === currentAccount) {
       accessToken = stored;
       set({ connected: true, error: "" });
       get().refreshSidebar(); // a 401 here (expired) clears back to disconnected
@@ -205,7 +226,7 @@ export const useGCal = create<GCalState>((set, get) => ({
       return;
     }
     if (!clientId) return;
-    if (localStorage.getItem(AUTO_KEY) !== "1") return;
+    if (localStorage.getItem(autoKey()) !== "1") return;
     whenGoogleReady(() => {
       const tc = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
@@ -228,8 +249,7 @@ export const useGCal = create<GCalState>((set, get) => ({
     if (accessToken && typeof google !== "undefined" && google.accounts?.oauth2) {
       google.accounts.oauth2.revoke(accessToken, () => {});
     }
-    clearToken();
-    localStorage.removeItem(AUTO_KEY); // don't silently reconnect after an explicit disconnect
+    clearToken(); // full teardown incl. per-account reconnect memory
     set({ connected: false, sidebarEvents: null, gridEvents: [], error: "" });
   },
 
@@ -239,10 +259,22 @@ export const useGCal = create<GCalState>((set, get) => ({
   // once it expires, the Connect button re-establishes it via GIS.
   adoptToken: (token, weekStart) => {
     setToken(token);
-    localStorage.setItem(AUTO_KEY, "1"); // enable silent GIS reconnect after reload
     set({ connected: true, error: "" });
     get().refreshSidebar();
     get().refreshGrid(weekStart);
+  },
+
+  // Sync tells us which account is signed in (or "" when signed out) so the
+  // calendar connection is scoped to it.
+  setAccount: (id) => {
+    currentAccount = id;
+  },
+
+  // On sign-out: drop the live connection + hide events, but keep the tab's
+  // stored token so re-logging into the SAME account restores it silently.
+  suspend: () => {
+    suspendToken();
+    set({ connected: false, sidebarEvents: null, gridEvents: [], error: "" });
   },
 }));
 

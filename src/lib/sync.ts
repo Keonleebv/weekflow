@@ -200,22 +200,27 @@ export function initSync() {
   // real SIGNED_OUT event clears local data.
   supabase.auth.onAuthStateChange((event, session) => {
     if (session?.user) {
+      // Scope the calendar to this account before any token work.
+      useGCal.getState().setAccount(session.user.id);
       onLogin(session.user.id);
-      // If they signed in with Google (calendar scope granted), the session
-      // carries a Google access token — connect the calendar in one step.
-      // provider_token is only present right after the OAuth redirect, not on
-      // a restored session, so a reload falls back to the Connect button.
       if (session.provider_token) {
+        // Signed in with Google (calendar scope granted) — connect in one step.
+        // provider_token is only present right after the OAuth redirect.
         useGCal
           .getState()
           .adoptToken(session.provider_token, useStore.getState().currentWeekStart);
+      } else {
+        // Otherwise reconnect the calendar only if THIS account had it connected
+        // (restores this tab's token, else best-effort silent GIS).
+        useGCal.getState().tryAutoConnect();
       }
     } else if (event === "SIGNED_OUT") {
       onLogout();
-      // Google Calendar stays connected across Weekflow account switches — it's
-      // a device-level connection to the user's Google account, not
-      // Weekflow-account data (the schedule is, and that's reset above). Ending
-      // it is an explicit choice via the sidebar's Disconnect button.
+      // Calendar is account-based: drop the live connection on sign-out (no more
+      // "synced" while logged out). The token stays in the tab so re-logging
+      // into the same account restores it.
+      useGCal.getState().suspend();
+      useGCal.getState().setAccount("");
     }
   });
 }

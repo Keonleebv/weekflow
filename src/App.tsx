@@ -43,8 +43,8 @@ function App() {
   useEffect(() => {
     if (!onboarded && window.innerWidth <= 860) setView("day");
     ensureCurrentWeek();
-    // reconnect Google Calendar silently if it was connected before this reload
-    useGCal.getState().tryAutoConnect();
+    // Calendar reconnect is driven by the auth state (see initSync) so it's
+    // account-scoped — a logged-out load never auto-connects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
