@@ -209,11 +209,13 @@ export const useGCal = create<GCalState>((set, get) => ({
     );
   },
 
-  // Reconnect for the CURRENT account only. First reuse this tab's stored token
-  // if it belongs to this account (survives refresh reliably). If none, fall
-  // back to a silent, no-popup GIS re-auth — best-effort, browsers may block it.
+  // Reconnect for the CURRENT account only, and ONLY from this tab's stored
+  // token if it belongs to this account — a genuinely silent path. We never
+  // auto-invoke Google's token flow here: `requestAccessToken` always opens a
+  // window (even with prompt:""), so triggering it on login is a surprise popup.
+  // Without a valid stored token we simply leave the Connect button for a
+  // deliberate click.
   tryAutoConnect: () => {
-    const { clientId } = get();
     if (accessToken) return;
     const store = ss();
     const stored = store?.getItem(TOKEN_KEY) ?? null;
@@ -223,26 +225,7 @@ export const useGCal = create<GCalState>((set, get) => ({
       set({ connected: true, error: "" });
       get().refreshSidebar(); // a 401 here (expired) clears back to disconnected
       get().refreshGrid(currentWeek());
-      return;
     }
-    if (!clientId) return;
-    if (localStorage.getItem(autoKey()) !== "1") return;
-    whenGoogleReady(() => {
-      const tc = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: GCAL_SCOPE,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        callback: (resp: any) => {
-          if (resp.error) return; // stay disconnected quietly
-          setToken(resp.access_token);
-          set({ connected: true, error: "" });
-          get().refreshSidebar();
-          get().refreshGrid(currentWeek());
-        },
-        error_callback: () => {}, // silent — leave the Connect button
-      });
-      tc.requestAccessToken({ prompt: "" });
-    });
   },
 
   disconnect: () => {
