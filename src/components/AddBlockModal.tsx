@@ -44,6 +44,9 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
   const [recurrence, setRecurrence] = useState<Recurrence>(null);
   const [askDelete, setAskDelete] = useState(false);
   const [error, setError] = useState("");
+  // Once the time is explicit — dragged out on the grid, or hand-picked — it's
+  // "pinned": switching category must not overwrite it with a smart default.
+  const [timePinned, setTimePinned] = useState(false);
 
   // Smart default: a category's most recently created block's times, so a new
   // block starts where you usually put that category (14c). Null if none yet.
@@ -65,17 +68,21 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
       setTitle(editing.title);
       setNotes(editing.notes ?? "");
       setRecurrence(editing.recurrence);
+      setTimePinned(true); // an existing block's time is fixed
     } else {
       const cat = categories[0]?.id ?? "";
       setCatId(cat);
       setDate(prefill ? prefill.date : selectedDate);
       if (prefill) {
+        // dragged out an explicit range → keep it, even across category switches
         setStart(prefill.start);
         setEnd(prefill.end);
+        setTimePinned(true);
       } else {
         const d = catDefaultTimes(cat);
         setStart(d?.start ?? 9 * 60);
         setEnd(d?.end ?? 11 * 60);
+        setTimePinned(false); // no explicit time yet → category smart-default may fill it
       }
       setTitle("");
       setNotes("");
@@ -86,10 +93,12 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, prefill, selectedDate, categories]);
 
-  // picking a category on a NEW block pulls that category's usual time
+  // picking a category on a NEW block pulls that category's usual time — but
+  // only while the time is still unspecified. An explicit (dragged or hand-set)
+  // time stays put.
   const pickCategory = (id: string) => {
     setCatId(id);
-    if (!editing) {
+    if (!editing && !timePinned) {
       const d = catDefaultTimes(id);
       setStart(d?.start ?? 9 * 60);
       setEnd(d?.end ?? 11 * 60);
@@ -207,7 +216,10 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
             <label>Start Time</label>
             <select
               value={start}
-              onChange={(e) => setStart(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                setStart(parseInt(e.target.value, 10));
+                setTimePinned(true);
+              }}
             >
               {TIME_OPTIONS.map((m) => (
                 <option key={m} value={m}>
@@ -220,7 +232,10 @@ export function AddBlockModal({ open, prefill, editing, onClose, onSaved }: Prop
             <label>End Time</label>
             <select
               value={end}
-              onChange={(e) => setEnd(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                setEnd(parseInt(e.target.value, 10));
+                setTimePinned(true);
+              }}
             >
               {TIME_OPTIONS.map((m) => (
                 <option key={m} value={m}>
