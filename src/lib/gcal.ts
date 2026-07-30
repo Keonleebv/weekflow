@@ -220,13 +220,6 @@ export const useGCal = create<GCalState>((set, get) => ({
     const store = ss();
     const stored = store?.getItem(TOKEN_KEY) ?? null;
     const storedAcct = store?.getItem(TOKEN_ACCT_KEY) ?? "";
-    console.info(
-      "[weekflow gcal] tryAutoConnect account=%s hasStoredToken=%s storedAcct=%s match=%s",
-      currentAccount,
-      !!stored,
-      storedAcct,
-      !!stored && storedAcct === currentAccount
-    );
     if (stored && storedAcct === currentAccount) {
       accessToken = stored;
       set({ connected: true, error: "" });
@@ -303,7 +296,6 @@ function handleFetchError(
 ) {
   const err = e as { status?: number; message?: string };
   if (err.status === 401 || err.status === 403) {
-    console.info("[weekflow gcal] token rejected (%s) — clearing", err.status);
     clearToken();
     set({
       connected: false,
