@@ -212,7 +212,10 @@ export function initSync() {
       }
     } else if (event === "SIGNED_OUT") {
       onLogout();
-      useGCal.getState().disconnect();
+      // Google Calendar stays connected across Weekflow account switches — it's
+      // a device-level connection to the user's Google account, not
+      // Weekflow-account data (the schedule is, and that's reset above). Ending
+      // it is an explicit choice via the sidebar's Disconnect button.
     }
   });
 }
