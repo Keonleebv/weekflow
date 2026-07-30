@@ -76,6 +76,7 @@ export function DayView({ onCreateRange, onEdit }: Props) {
   const categories = useStore((s) => s.categories);
   const selectedDate = useStore((s) => s.selectedDate);
   const toggleTask = useStore((s) => s.toggleTask);
+  const deleteTask = useStore((s) => s.deleteTask);
   const deleteBlock = useStore((s) => s.deleteBlock);
   const skipOccurrence = useStore((s) => s.skipOccurrence);
   const updateBlock = useStore((s) => s.updateBlock);
@@ -255,6 +256,15 @@ export function DayView({ onCreateRange, onEdit }: Props) {
                               id={`dt-${t.id}`}
                             />
                             <label htmlFor={`dt-${t.id}`}>{t.title}</label>
+                            <button
+                              className="task-del"
+                              aria-label="Delete task"
+                              title="Delete task"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={() => deleteTask(t.id)}
+                            >
+                              <XSmall />
+                            </button>
                           </div>
                         ))}
                       </div>

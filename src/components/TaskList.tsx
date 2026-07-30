@@ -6,6 +6,7 @@ import {
   todayISO,
   datesOfWeek,
 } from "../lib/time";
+import { XSmall } from "./icons";
 
 export function TaskList() {
   const blocks = useStore((s) => s.blocks);
@@ -17,6 +18,7 @@ export function TaskList() {
   const selectedDate = useStore((s) => s.selectedDate);
   const toggleTask = useStore((s) => s.toggleTask);
   const addTask = useStore((s) => s.addTask);
+  const deleteTask = useStore((s) => s.deleteTask);
 
   const today = todayISO();
   const weekDates = datesOfWeek(currentWeekStart);
@@ -64,6 +66,14 @@ export function TaskList() {
       {withDate && (
         <span className="task-overdue-date">{shortDate(t.date)}</span>
       )}
+      <button
+        className="task-del"
+        aria-label="Delete task"
+        title="Delete task"
+        onClick={() => deleteTask(t.id)}
+      >
+        <XSmall />
+      </button>
     </div>
   );
 
